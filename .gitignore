@@ -1,0 +1,5 @@
+.gradle/
+build/
+.gradle-bootstrap/
+gradle-8.14.3-bin.zip
+*.log
