@@ -117,7 +117,7 @@ INFO는 시작/종료와 적용한 비민감 설정, WARN은 개별 파일·일�
 - Kafka client: 3.9.2
 - CNCF CloudEvents core/json-jackson/kafka: 4.1.1
 - SLF4J API/simple provider: 2.0.17
-- Jackson: 2.17.2
+- Jackson: 2.21.3
 - JUnit Jupiter: 5.10.2
 
 이 조합은 Java 8 bytecode로 컴파일됩니다. Kafka Java client는 API version negotiation으로 broker 2.8.2가 지원하는 protocol을 선택하므로 producer 기본 기능과 호환됩니다. CloudEvents Kafka 모듈의 전이 Kafka client는 Gradle에서 명시한 3.9.2 하나로 정렬합니다.
