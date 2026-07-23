@@ -115,7 +115,8 @@ INFO는 시작/종료와 적용한 비민감 설정, WARN은 개별 파일·일�
 ## 버전과 호환성
 
 - Kafka client: 3.9.2
-- CNCF CloudEvents core/json-jackson/kafka: 2.5.0
+- CNCF CloudEvents core/json-jackson/kafka: 4.1.1
+- SLF4J API/simple provider: 2.0.17
 - Jackson: 2.17.2
 - JUnit Jupiter: 5.10.2
 
