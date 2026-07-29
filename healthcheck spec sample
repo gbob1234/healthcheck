@@ -27,7 +27,7 @@
             "code": "NORMAL",
             "message": "Kafka producer is running normally."
         },
-        "hearbeat": {
+        "heartbeat": {
             "sequence": 1,
             "interval": 60,
             "startedAt": "2024-06-01T12:00:00Z+09:00",

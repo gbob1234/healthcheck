@@ -25,7 +25,7 @@ class HealthCloudEventFactoryTest {
         assertEquals("1.0", event.getSpecVersion().toString()); assertEquals("healthcheck", event.getSubject());
         assertEquals(config.identity.eventType, event.getType()); assertEquals("application/json", event.getDataContentType());
         JsonNode data = new ObjectMapper().readTree(event.getData().toBytes());
-        assertTrue(data.has("sourceInfo")); assertTrue(data.has("status")); assertTrue(data.has("hearbeat"));
+        assertTrue(data.has("sourceInfo")); assertTrue(data.has("status")); assertTrue(data.has("heartbeat"));
         assertTrue(data.has("kafkaInfo")); assertTrue(data.has("workInfo")); assertTrue(data.has("errorInfo"));
     }
 }

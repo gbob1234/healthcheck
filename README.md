@@ -26,7 +26,7 @@ single-thread scheduleWithFixedDelay → 상태 snapshot → 상태 평가
 
 ## 헬스체크 샘플 반영
 
-샘플의 CloudEvents envelope(`specversion`, `type`, `source`, `id`, `time`, `subject`, `datacontenttype`, `dataschema`, `data`)와 `sourceInfo`, `status`, `hearbeat`, `kafkaInfo`, `workInfo`, `errorInfo`를 유지합니다. 기존 소비자 호환성을 위해 샘플의 `hearbeat` 오타도 유지했습니다.
+샘플의 CloudEvents envelope(`specversion`, `type`, `source`, `id`, `time`, `subject`, `datacontenttype`, `dataschema`, `data`)와 `sourceInfo`, `status`, `heartbeat`, `kafkaInfo`, `workInfo`, `errorInfo`를 유지합니다.
 
 다음 표준 위반 예시는 보정했습니다.
 
@@ -135,4 +135,3 @@ INFO는 시작/종료와 적용한 비민감 설정, WARN은 개별 파일·일�
 - producer 생성은 설정·인증서 형식 오류를 즉시 찾지만 실제 broker 연결은 Kafka가 비동기로 수행하므로, 네트워크/ACL 오류는 첫 callback부터 실패 정책에 반영됩니다.
 - 처리 완료 후 성공 callback에서 파일을 삭제합니다. 별도 archive가 필요하면 운영 반입 전에 삭제 정책을 확장해야 합니다.
 - 파일 내용 자체가 유효한 이미지인지 디코딩하지 않고 확장자·크기·읽기 가능 여부만 검증합니다.
-- `healthcheck spec sample`의 `hearbeat` 오타는 소비자 호환성 때문에 유지했습니다.

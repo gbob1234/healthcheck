@@ -19,7 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Creates a spec-compliant CloudEvent while preserving the sample's data object and hearbeat spelling. */
+/** Creates a spec-compliant CloudEvent while preserving the sample's data object structure. */
 public final class HealthCloudEventFactory {
     private final ApplicationConfig config;
     private final ObjectMapper mapper;
@@ -34,7 +34,7 @@ public final class HealthCloudEventFactory {
         Map<String, Object> data = new LinkedHashMap<String, Object>();
         data.put("sourceInfo", sourceInfo());
         data.put("status", status(status));
-        data.put("hearbeat", heartbeat(s, sequence, now));
+        data.put("heartbeat", heartbeat(s, sequence, now));
         data.put("kafkaInfo", kafkaInfo(s));
         data.put("workInfo", workInfo(s));
         data.put("errorInfo", errorInfo(s));
