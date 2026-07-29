@@ -4,7 +4,6 @@ import com.kafka.producer.TestConfigFactory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
 
@@ -25,14 +24,19 @@ class ConfigLoaderTest {
     }
 
     @Test void loadsSslAndSaslSsl() throws Exception {
-        Path trust = Files.createFile(temp.resolve("trust.jks"));
         Properties ssl = TestConfigFactory.base(temp);
-        ssl.setProperty("kafka.security.mode", "SSL"); ssl.setProperty("kafka.ssl.truststore.location", trust.toString());
-        ssl.setProperty("kafka.ssl.truststore.password", "secret");
-        assertEquals(ApplicationConfig.SecurityMode.SSL, TestConfigFactory.load(temp, ssl).kafka.securityMode);
+        ssl.setProperty("kafka.security.mode", "SSL");
+        ssl.setProperty("kafka.ssl.key.password", "secret");
+        ApplicationConfig sslConfig = TestConfigFactory.load(temp, ssl);
+        assertEquals(ApplicationConfig.SecurityMode.SSL, sslConfig.kafka.securityMode);
+        assertEquals("", sslConfig.kafka.truststoreLocation);
+        assertEquals("", sslConfig.kafka.keystoreLocation);
+        assertEquals("secret", sslConfig.kafka.keyPassword);
+
         Properties sasl = TestConfigFactory.base(temp);
-        sasl.setProperty("kafka.security.mode", "sasl_ssl"); sasl.setProperty("kafka.ssl.truststore.location", trust.toString());
-        sasl.setProperty("kafka.ssl.truststore.password", "secret"); sasl.setProperty("kafka.sasl.username", "user"); sasl.setProperty("kafka.sasl.password", "pass");
+        sasl.setProperty("kafka.security.mode", "sasl_ssl");
+        sasl.setProperty("kafka.ssl.key.password", "secret");
+        sasl.setProperty("kafka.sasl.username", "user"); sasl.setProperty("kafka.sasl.password", "pass");
         assertEquals(ApplicationConfig.SecurityMode.SASL_SSL, TestConfigFactory.load(temp, sasl).kafka.securityMode);
     }
 
@@ -43,5 +47,9 @@ class ConfigLoaderTest {
         assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, invalid));
         Properties missingDevice = TestConfigFactory.base(temp); missingDevice.remove("device.id");
         assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, missingDevice));
+        Properties invalidTruststore = TestConfigFactory.base(temp);
+        invalidTruststore.setProperty("kafka.security.mode", "SSL");
+        invalidTruststore.setProperty("kafka.ssl.truststore.location", temp.resolve("missing.jks").toString());
+        assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, invalidTruststore));
     }
 }

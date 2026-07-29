@@ -35,10 +35,7 @@ public final class ConfigLoader {
         try { mode = ApplicationConfig.SecurityMode.valueOf(required(p, "kafka.security.mode").toUpperCase(Locale.ROOT)); }
         catch (IllegalArgumentException e) { throw new IllegalArgumentException("kafka.security.mode must be PLAINTEXT, SSL, or SASL_SSL", e); }
         String truststore = value(p, "kafka.ssl.truststore.location", "");
-        if (mode != ApplicationConfig.SecurityMode.PLAINTEXT) {
-            requireFile("kafka.ssl.truststore.location", truststore);
-            required(p, "kafka.ssl.truststore.password");
-        }
+        if (!truststore.isEmpty()) requireFile("kafka.ssl.truststore.location", truststore);
         String mechanism = value(p, "kafka.sasl.mechanism", "SCRAM-SHA-512");
         String jaas = value(p, "kafka.sasl.jaas.config", "");
         if (mode == ApplicationConfig.SecurityMode.SASL_SSL) {
@@ -48,11 +45,7 @@ public final class ConfigLoader {
             if (jaas.isEmpty()) { required(p, "kafka.sasl.username"); required(p, "kafka.sasl.password"); }
         }
         String keystore = value(p, "kafka.ssl.keystore.location", "");
-        if (!keystore.isEmpty()) {
-            requireFile("kafka.ssl.keystore.location", keystore);
-            required(p, "kafka.ssl.keystore.password");
-            required(p, "kafka.ssl.key.password");
-        }
+        if (!keystore.isEmpty()) requireFile("kafka.ssl.keystore.location", keystore);
         ApplicationConfig.KafkaCommon kc = new ApplicationConfig.KafkaCommon(
                 required(p, "kafka.bootstrap.servers"), mode, truststore,
                 value(p, "kafka.ssl.truststore.password", ""), keystore,

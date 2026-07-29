@@ -77,18 +77,20 @@ kafka.bootstrap.servers=broker1:9092,broker2:9092
 
 ```properties
 kafka.security.mode=SSL
-kafka.ssl.truststore.location=C:/kafka/certs/client.truststore.jks
-kafka.ssl.truststore.password=changeit
+kafka.ssl.key.password=changeit
 ```
 
-mTLS가 필요한 경우에만 `kafka.ssl.keystore.location`, `kafka.ssl.keystore.password`, `kafka.ssl.key.password`를 모두 설정합니다. truststore는 broker 인증서를 검증하고, keystore는 client 인증서를 제공합니다.
+기존 운영 환경처럼 JVM 또는 실행 환경의 기본 SSL 저장소를 사용하는 경우
+`kafka.ssl.truststore.location`과 `kafka.ssl.keystore.location`을 비워둘 수 있습니다.
+`kafka.ssl.key.password`만 지정해도 Kafka의 `ssl.key.password`로 전달됩니다.
+명시적인 저장소가 필요한 환경에서만 truststore/keystore 경로와 비밀번호를 설정합니다.
+비어 있는 SSL 속성은 Kafka 설정에 추가되지 않으며, 경로를 지정한 경우에만 파일 존재 여부를 검증합니다.
 
 ### SASL_SSL
 
 ```properties
 kafka.security.mode=SASL_SSL
-kafka.ssl.truststore.location=C:/kafka/certs/client.truststore.jks
-kafka.ssl.truststore.password=changeit
+kafka.ssl.key.password=changeit
 kafka.sasl.mechanism=SCRAM-SHA-512
 kafka.sasl.username=health-user
 kafka.sasl.password=secret

@@ -31,18 +31,20 @@ public final class KafkaPropertiesFactory {
     /** Applies only settings needed by the selected mode; secret values must never be logged. */
     private void applySecurity(Properties p, ApplicationConfig.KafkaCommon c) {
         if (c.securityMode == ApplicationConfig.SecurityMode.PLAINTEXT) return;
-        p.setProperty(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, c.truststoreLocation);
-        p.setProperty(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, c.truststorePassword);
+        setIfNotEmpty(p, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, c.truststoreLocation);
+        setIfNotEmpty(p, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, c.truststorePassword);
         p.setProperty(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, c.endpointIdentificationAlgorithm);
-        if (!c.keystoreLocation.isEmpty()) {
-            p.setProperty(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, c.keystoreLocation);
-            p.setProperty(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, c.keystorePassword);
-            p.setProperty(SslConfigs.SSL_KEY_PASSWORD_CONFIG, c.keyPassword);
-        }
+        setIfNotEmpty(p, SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, c.keystoreLocation);
+        setIfNotEmpty(p, SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, c.keystorePassword);
+        setIfNotEmpty(p, SslConfigs.SSL_KEY_PASSWORD_CONFIG, c.keyPassword);
         if (c.securityMode == ApplicationConfig.SecurityMode.SASL_SSL) {
             p.setProperty(SaslConfigs.SASL_MECHANISM, c.saslMechanism);
             p.setProperty(SaslConfigs.SASL_JAAS_CONFIG, c.saslJaasConfig.isEmpty() ? createJaas(c.saslUsername, c.saslPassword) : c.saslJaasConfig);
         }
+    }
+
+    private void setIfNotEmpty(Properties properties, String key, String value) {
+        if (value != null && !value.isEmpty()) properties.setProperty(key, value);
     }
 
     public String createJaas(String username, String password) {
