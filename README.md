@@ -1,4 +1,4 @@
-# IMAGE_PRODUCER
+# image-producer
 
 Windows 장비의 이미지 디렉터리를 장기간 감시하고, 완성된 이미지 파일을 Base64 JSON으로 Kafka에 비동기 발행하며, 별도 Kafka producer로 CNCF CloudEvents 1.0 헬스체크를 전송하는 Java 8 애플리케이션입니다.
 
@@ -41,7 +41,7 @@ JDK 8 이상에서 Wrapper를 사용합니다. 빌드 결과는 Java 8 bytecode�
 ```bat
 gradlew.bat clean test
 gradlew.bat build
-java -jar build\libs\IMAGE_PRODUCER-1.1-SNAPSHOT.jar .\config.properties
+java -jar build\libs\image-producer-1.1-SNAPSHOT.jar .\config.properties
 ```
 
 실행 전 `image.watch.directory`가 존재하고 읽기 가능한 디렉터리인지 확인해야 합니다. fat JAR은 모든 runtime 의존성을 포함합니다.

@@ -41,7 +41,7 @@ tasks.withType(JavaCompile).configureEach {
 test { useJUnitPlatform() }
 
 jar {
-    archiveBaseName.set('IMAGE_PRODUCER')
+    archiveBaseName.set('image-producer')
     manifest { attributes('Main-Class': application.mainClass.get()) }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }

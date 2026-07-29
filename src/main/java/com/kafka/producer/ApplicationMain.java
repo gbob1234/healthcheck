@@ -32,7 +32,7 @@ public final class ApplicationMain {
     public static void main(String[] args) {
         final ApplicationLifecycleManager earlyLifecycle = new ApplicationLifecycleManager(20);
         if (args.length != 1) {
-            earlyLifecycle.terminate("INVALID_ARGUMENTS", "Usage: java -jar IMAGE_PRODUCER-1.1-SNAPSHOT.jar <config.properties>", null);
+            earlyLifecycle.terminate("INVALID_ARGUMENTS", "Usage: java -jar image-producer-1.1-SNAPSHOT.jar <config.properties>", null);
             return;
         }
         try { start(Paths.get(args[0]).toAbsolutePath().normalize()); }

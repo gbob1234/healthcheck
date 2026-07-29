@@ -79,7 +79,7 @@ public final class ConfigLoader {
                 required(p, "health.program.name"), required(p, "health.program.version"),
                 required(p, "health.event.type"), required(p, "health.event.source"),
                 required(p, "health.event.dataschema"));
-        return new ApplicationConfig(value(p, "application.name", "IMAGE_PRODUCER"),
+        return new ApplicationConfig(value(p, "application.name", "image-producer"),
                 value(p, "application.version", "1.1-SNAPSHOT"),
                 positiveInt(p, "application.fatal.exit.code", 20), iw, kc, imageProducer,
                 healthProducer, health, identity);
