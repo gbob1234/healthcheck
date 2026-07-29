@@ -54,11 +54,17 @@ java -jar build\libs\image-producer-1.1-SNAPSHOT.jar .\config.properties
 - `image.watch.*`, `image.allowed.extensions`: 감시 위치와 허용 확장자
 - `image.file.stability.*`: 크기 확인 간격, 동일 크기 필요 횟수, timeout
 - `image.processing.thread.count`, `image.max.file.size.bytes`: 작업 풀과 메모리 상한
+- `device.id`: Kafka client ID, record key, CloudEvent source에 재사용되는 공통 장비 ID
 - `kafka.bootstrap.servers`, `kafka.security.mode`: 공통 연결 설정
 - `image.kafka.*`: 이미지 topic과 producer delivery 설정
 - `health.*`: 주기, 초기화 재시도, 장애 임계값, 복구 및 종료 timeout
 - `health.kafka.*`: 짧은 block timeout을 사용하는 헬스 producer 설정
-- `health.device/system/program/event.*`: CloudEvent 식별자
+- `health.system/program/event.*`: CloudEvent 시스템·프로그램·이벤트 식별자
+
+`device.id=DEVICE-001`이면 이미지 client ID는 `DEVICE-001-image`, 헬스 client ID는
+`DEVICE-001-health`로 생성됩니다. CloudEvent source도
+`/systems/{systemId}/devices/{deviceId}/programs/{programName}` 형식으로 자동 생성하므로
+장비 ID는 설정 파일에 한 번만 작성합니다.
 
 ### PLAINTEXT
 

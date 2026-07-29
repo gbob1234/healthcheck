@@ -17,6 +17,11 @@ class ConfigLoaderTest {
         ApplicationConfig c = TestConfigFactory.load(temp, TestConfigFactory.base(temp));
         assertEquals(ApplicationConfig.SecurityMode.PLAINTEXT, c.kafka.securityMode);
         assertEquals(temp.toAbsolutePath().normalize(), c.imageWatcher.directory);
+        assertEquals("DEVICE-001", c.identity.deviceId);
+        assertEquals("DEVICE-001-image", c.imageProducer.clientId);
+        assertEquals("DEVICE-001-health", c.healthProducer.clientId);
+        assertEquals("/systems/EQUIPMENT_IMAGE_SENDER/devices/DEVICE-001/programs/image-producer",
+                c.identity.eventSource);
     }
 
     @Test void loadsSslAndSaslSsl() throws Exception {
@@ -36,5 +41,7 @@ class ConfigLoaderTest {
         assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, missing));
         Properties invalid = TestConfigFactory.base(temp); invalid.setProperty("kafka.security.mode", "MAGIC");
         assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, invalid));
+        Properties missingDevice = TestConfigFactory.base(temp); missingDevice.remove("device.id");
+        assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, missingDevice));
     }
 }

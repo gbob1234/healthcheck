@@ -60,8 +60,12 @@ public final class ConfigLoader {
                 value(p, "kafka.ssl.endpoint.identification.algorithm", "https"), mechanism,
                 value(p, "kafka.sasl.username", ""), value(p, "kafka.sasl.password", ""), jaas);
 
-        ApplicationConfig.Producer imageProducer = producer(p, "image", 0, 33554432L);
-        ApplicationConfig.Producer healthProducer = producer(p, "health", intValue(p, "health.kafka.linger.ms", 0),
+        String deviceId = required(p, "device.id");
+        String systemId = required(p, "health.system.id");
+        String programName = required(p, "health.program.name");
+        ApplicationConfig.Producer imageProducer = producer(p, "image", deviceId + "-image", 0, 33554432L);
+        ApplicationConfig.Producer healthProducer = producer(p, "health", deviceId + "-health",
+                intValue(p, "health.kafka.linger.ms", 0),
                 longValue(p, "health.kafka.buffer.memory", 1048576));
         ApplicationConfig.Health health = new ApplicationConfig.Health(
                 bool(p, "health.enabled", true), bool(p, "health.required", true),
@@ -75,9 +79,10 @@ public final class ConfigLoader {
                 positiveLong(p, "health.shutdown.timeout.seconds", 5),
                 positiveInt(p, "health.fatal.exit.code", positiveInt(p, "application.fatal.exit.code", 20)));
         ApplicationConfig.Identity identity = new ApplicationConfig.Identity(
-                required(p, "health.device.id"), required(p, "health.system.id"), required(p, "health.source.type"),
-                required(p, "health.program.name"), required(p, "health.program.version"),
-                required(p, "health.event.type"), required(p, "health.event.source"),
+                deviceId, systemId, required(p, "health.source.type"),
+                programName, required(p, "health.program.version"),
+                required(p, "health.event.type"),
+                "/systems/" + systemId + "/devices/" + deviceId + "/programs/" + programName,
                 required(p, "health.event.dataschema"));
         return new ApplicationConfig(value(p, "application.name", "image-producer"),
                 value(p, "application.version", "1.1-SNAPSHOT"),
@@ -85,10 +90,11 @@ public final class ConfigLoader {
                 healthProducer, health, identity);
     }
 
-    private static ApplicationConfig.Producer producer(Properties p, String prefix, int linger, long buffer) {
+    private static ApplicationConfig.Producer producer(Properties p, String prefix, String clientId,
+                                                       int linger, long buffer) {
         String kafkaPrefix = prefix + ".kafka.";
         String topicKey = "health".equals(prefix) ? "health.topic" : "image.kafka.topic";
-        return new ApplicationConfig.Producer(required(p, topicKey), required(p, kafkaPrefix + "client.id"),
+        return new ApplicationConfig.Producer(required(p, topicKey), clientId,
                 value(p, kafkaPrefix + "acks", "health".equals(prefix) ? "1" : "all"),
                 nonNegativeInt(p, kafkaPrefix + "retries", "health".equals(prefix) ? 1 : 3),
                 positiveInt(p, kafkaPrefix + "request.timeout.ms", "health".equals(prefix) ? 5000 : 30000),
