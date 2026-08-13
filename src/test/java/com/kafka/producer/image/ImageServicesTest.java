@@ -10,7 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,9 +22,13 @@ class ImageServicesTest {
         assertTrue(new ImageFileStabilityChecker(1, 1, 1000, 100).awaitStable(image));
         String encoded = new ImageEncodingService(100).encode(image);
         assertEquals(Base64.getEncoder().encodeToString("image".getBytes(StandardCharsets.UTF_8)), encoded);
-        String json = new ImageMessageFactory(new ObjectMapper(), "DEVICE-1", Clock.fixed(Instant.EPOCH, ZoneOffset.UTC)).create(image, encoded);
+        Clock clock = Clock.fixed(Instant.parse("2026-08-13T05:30:55.184Z"), ZoneId.of("Asia/Seoul"));
+        String json = new ImageMessageFactory(new ObjectMapper(), "DEVICE-1", clock).create(image, encoded);
         JsonNode node = new ObjectMapper().readTree(json);
-        assertEquals("sample.jpg", node.get("file_name").asText()); assertEquals("DEVICE-1", node.get("deviceId").asText()); assertEquals(encoded, node.get("image").asText());
+        assertEquals("sample.jpg", node.get("file_name").asText());
+        assertEquals("20260813143055184", node.get("create_time").asText());
+        assertEquals("DEVICE-1", node.get("deviceId").asText());
+        assertEquals(encoded, node.get("image").asText());
     }
     @Test void rejectsEmptyAndOversizedFiles() throws Exception {
         Path empty = Files.createFile(temp.resolve("empty.png"));

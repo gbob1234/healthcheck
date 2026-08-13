@@ -14,6 +14,9 @@ ENTRY_CREATE → 확장자/임시파일 필터 → 중복 경로 차단 → work
 → 이미지 전용 KafkaProducer.send(callback) → 성공 시 원본 삭제
 ```
 
+이미지 JSON의 `create_time`은 장비 PC 로컬 시간 기준 `yyyyMMddHHmmssSSS`
+형식(예: `20260813143055184`)으로 생성됩니다.
+
 헬스 흐름은 다음과 같습니다.
 
 ```text

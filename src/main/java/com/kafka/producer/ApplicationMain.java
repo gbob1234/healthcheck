@@ -43,7 +43,7 @@ public final class ApplicationMain {
         ApplicationConfig config = new ConfigLoader().load(configPath);
         final ApplicationLifecycleManager lifecycle = new ApplicationLifecycleManager(config.fatalExitCode);
         try {
-        Clock clock = Clock.systemUTC();
+        Clock clock = Clock.systemDefaultZone();
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(JsonFormat.getCloudEventJacksonModule());
         ApplicationHealthState state = new ApplicationHealthState(clock);

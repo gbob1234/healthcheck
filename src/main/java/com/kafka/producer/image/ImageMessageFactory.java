@@ -6,11 +6,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Preserves the original image field and adds traceable filename, device, and creation time fields. */
 public final class ImageMessageFactory {
+    private static final DateTimeFormatter CREATE_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
     private final ObjectMapper mapper;
     private final String deviceId;
     private final Clock clock;
@@ -24,7 +27,7 @@ public final class ImageMessageFactory {
     public String create(Path file, String base64) throws JsonProcessingException {
         Map<String, Object> value = new LinkedHashMap<String, Object>();
         value.put("file_name", file.getFileName().toString());
-        value.put("create_time", Instant.now(clock).toString());
+        value.put("create_time", CREATE_TIME_FORMAT.format(Instant.now(clock).atZone(clock.getZone())));
         value.put("deviceId", deviceId);
         value.put("image", base64);
         return mapper.writeValueAsString(value);
