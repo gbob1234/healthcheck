@@ -1,140 +1,92 @@
-# image-producer
+# file-collector
 
-Windows 장비의 이미지 디렉터리를 장기간 감시하고, 완성된 이미지 파일을 Base64 JSON으로 Kafka에 비동기 발행하며, 별도 Kafka producer로 CNCF CloudEvents 1.0 헬스체크를 전송하는 Java 8 애플리케이션입니다.
+Windows 장비의 수집 디렉터리를 감시해 설정된 확장자의 파일을 S3에 업로드하고,
+Kafka에는 파일 메타데이터만 발행한 뒤 원본을 `old` 디렉터리로 이동하는 Java 8 애플리케이션입니다.
+별도 Kafka producer가 CNCF CloudEvents 1.0 형식의 헬스체크를 전송합니다.
 
-## 구조와 처리 흐름
-
-`ApplicationMain`이 설정과 객체를 조립합니다. `ConfigLoader`는 설정을 immutable 책임 객체로 변환하고 검증하며, `KafkaPropertiesFactory`는 각 producer에 새로운 `Properties`를 만듭니다.
-
-이미지 흐름은 다음과 같습니다.
+## 멀티모듈 구조
 
 ```text
-ENTRY_CREATE → 확장자/임시파일 필터 → 중복 경로 차단 → worker executor
-→ 파일 크기 안정화 및 open 확인 → 크기 제한 → Base64 → JSON
-→ 이미지 전용 KafkaProducer.send(callback) → 성공 시 원본 삭제
+collector-core   공통 설정, Kafka 보안 설정, 헬스체크, lifecycle
+file-collector   파일 감시, SHA-256, S3 업로드, 메타데이터 발행, archive 이동
 ```
 
-이미지 JSON의 `create_time`은 장비 PC 로컬 시간 기준 `yyyyMMddHHmmssSSS`
-형식(예: `20260813143055184`)으로 생성됩니다.
-
-헬스 흐름은 다음과 같습니다.
+## 처리 순서
 
 ```text
-single-thread scheduleWithFixedDelay → 상태 snapshot → 상태 평가
-→ 샘플 기반 CloudEvent → 헬스 전용 KafkaProducer.send(callback)
-→ 성공/실패 상태 반영 → 임계값 도달 시 producer 복구 → 실패 시 fatal 종료
+ENTRY_CREATE 또는 시작 시 기존 파일 스캔
+→ 확장자/임시파일 필터
+→ 파일 크기 안정화 및 open 확인
+→ SHA-256 계산
+→ S3 업로드
+→ Kafka 메타데이터 발행 및 broker ack 대기
+→ old 디렉터리로 이동
 ```
 
-이미지와 헬스 producer는 인스턴스, callback 상태, 실패 카운터, scheduler, close 책임을 공유하지 않습니다. Kafka 연결·보안 값만 공통 설정에서 읽습니다.
+S3 object key는 `{s3.object.key.prefix}/{원본 파일명}`입니다. 같은 파일명은 의도적으로
+동일 key를 덮어씁니다. endpoint와 인증정보는 Kafka 메시지에 포함하지 않습니다.
 
-## 헬스체크 샘플 반영
+작은 파일은 `PutObject`, `s3.multipart.threshold.bytes` 이상의 파일은 multipart upload를
+사용합니다. multipart 실패 시 생성한 upload를 abort합니다.
 
-샘플의 CloudEvents envelope(`specversion`, `type`, `source`, `id`, `time`, `subject`, `datacontenttype`, `dataschema`, `data`)와 `sourceInfo`, `status`, `heartbeat`, `kafkaInfo`, `workInfo`, `errorInfo`를 유지합니다.
+Kafka 메시지 예시는 다음과 같습니다.
 
-다음 표준 위반 예시는 보정했습니다.
+```json
+{
+  "schemaVersion": 1,
+  "eventId": "85b5...",
+  "deviceName": "DEVICE-001",
+  "fileName": "GROWING_DIA_1A001_None_None_None.csv",
+  "fileType": "CSV",
+  "fileSize": 30184,
+  "checksumAlgorithm": "SHA-256",
+  "checksum": "1b5a...",
+  "bucket": "equipment-collection",
+  "objectKey": "production/equipment/GROWING_DIA_1A001_None_None_None.csv",
+  "eTag": "...",
+  "uploadedAt": "2026-08-31T01:02:03Z"
+}
+```
 
-- `time`은 `2024-...Z+09:00` 같은 이중 offset 대신 UTC RFC 3339 형식으로 만듭니다.
-- `dataschema`는 URI여야 하므로 기본값을 `urn:company:schema:health-status:1.0`으로 사용합니다.
-- 상태 level은 요구사항의 `UP`, `WARN`, `DOWN`, `UNKNOWN`을 사용합니다.
+`eventId`는 `deviceName + bucket + objectKey + checksum`으로 결정적으로 생성합니다.
+프로그램 재시작이나 Kafka 재전송으로 같은 이벤트가 중복되면 Spark에서 이 값으로 제거할 수 있습니다.
+
+## 실패 정책
+
+S3와 Kafka 단계는 `file.processing.max.attempts`만큼 재시도합니다. 모두 실패하거나
+`old` 이동이 실패하면 fatal 종료합니다. 원본은 수집 디렉터리에 남으므로 운영자가 S3/Kafka를
+점검하고 프로그램을 재시작하면 시작 스캔으로 다시 처리됩니다.
+
+S3 성공 후 Kafka가 실패하면 재시작 과정에서 같은 key를 다시 덮어쓸 수 있습니다. Kafka 성공 후
+프로세스 종료 또는 이동 실패가 발생하면 메타데이터가 다시 발행될 수 있으므로 소비자는 `eventId`로
+멱등 처리해야 합니다. S3, Kafka, 로컬 파일시스템 사이에는 단일 분산 트랜잭션이 없습니다.
+
+Kafka 장애 중에는 종료 헬스 메시지도 발행되지 않을 수 있으므로 모니터링 시스템은 heartbeat
+미수신 임계시간으로 프로세스 장애를 감지해야 합니다.
+
+## 주요 설정
+
+- `file.watch.directory`: 장비 수집 경로
+- `file.archive.directory`: 성공 파일을 이동할 `old` 경로
+- `file.allowed.extensions`: `jpg,jpeg,png,csv` 형식의 허용 확장자
+- `file.processing.max.attempts`, `file.processing.retry.backoff.ms`: S3/Kafka 단계 재시도
+- `s3.endpoint`, `s3.region`, `s3.bucket`, `s3.object.key.prefix`: S3 목적지
+- `s3.multipart.threshold.bytes`, `s3.multipart.part.size.bytes`: multipart 전환 기준과 part 크기
+- `file.kafka.*`: 파일 메타데이터 producer 설정
+- `health.*`, `health.kafka.*`: heartbeat와 헬스 producer 설정
+
+`s3.access.key`와 `s3.secret.key`를 비우면 AWS SDK default credentials provider chain을 사용합니다.
+설정 파일에 직접 자격증명을 넣을 경우 파일 ACL을 제한해야 하며, 애플리케이션 로그에는 자격증명이
+출력되지 않습니다. S3 권한은 지정 bucket/prefix의 업로드와 multipart abort에 필요한 최소 권한만
+부여하는 것을 권장합니다.
 
 ## 빌드와 실행
 
-JDK 8 이상에서 Wrapper를 사용합니다. 빌드 결과는 Java 8 bytecode입니다.
-
 ```bat
 gradlew.bat clean test
-gradlew.bat build
-java -jar build\libs\image-producer-1.1-SNAPSHOT.jar .\config.properties
+gradlew.bat :file-collector:build
+java -jar file-collector\build\libs\file-collector-2.0-SNAPSHOT.jar .\config.properties
 ```
 
-실행 전 `image.watch.directory`가 존재하고 읽기 가능한 디렉터리인지 확인해야 합니다. fat JAR은 모든 runtime 의존성을 포함합니다.
-
-## 설정
-
-루트의 `config.properties`가 전체 예제입니다.
-
-- `application.*`: 이름, 버전, fatal exit code
-- `image.watch.*`, `image.allowed.extensions`: 감시 위치와 허용 확장자
-- `image.file.stability.*`: 크기 확인 간격, 동일 크기 필요 횟수, timeout
-- `image.processing.thread.count`, `image.max.file.size.bytes`: 작업 풀과 메모리 상한
-- `device.id`: Kafka client ID, record key, CloudEvent source에 재사용되는 공통 장비 ID
-- `kafka.bootstrap.servers`, `kafka.security.mode`: 공통 연결 설정
-- `image.kafka.*`: 이미지 topic과 producer delivery 설정
-- `health.*`: 주기, 초기화 재시도, 장애 임계값, 복구 및 종료 timeout
-- `health.kafka.*`: 짧은 block timeout을 사용하는 헬스 producer 설정
-- `health.system/program/event.*`: CloudEvent 시스템·프로그램·이벤트 식별자
-
-`device.id=DEVICE-001`이면 이미지 client ID는 `DEVICE-001-image`, 헬스 client ID는
-`DEVICE-001-health`로 생성됩니다. CloudEvent source도
-`/systems/{systemId}/devices/{deviceId}/programs/{programName}` 형식으로 자동 생성하므로
-장비 ID는 설정 파일에 한 번만 작성합니다.
-
-### PLAINTEXT
-
-```properties
-kafka.security.mode=PLAINTEXT
-kafka.bootstrap.servers=broker1:9092,broker2:9092
-```
-
-### SSL
-
-```properties
-kafka.security.mode=SSL
-kafka.ssl.key.password=changeit
-```
-
-기존 운영 환경처럼 JVM 또는 실행 환경의 기본 SSL 저장소를 사용하는 경우
-`kafka.ssl.truststore.location`과 `kafka.ssl.keystore.location`을 비워둘 수 있습니다.
-`kafka.ssl.key.password`만 지정해도 Kafka의 `ssl.key.password`로 전달됩니다.
-명시적인 저장소가 필요한 환경에서만 truststore/keystore 경로와 비밀번호를 설정합니다.
-비어 있는 SSL 속성은 Kafka 설정에 추가되지 않으며, 경로를 지정한 경우에만 파일 존재 여부를 검증합니다.
-
-### SASL_SSL
-
-```properties
-kafka.security.mode=SASL_SSL
-kafka.ssl.key.password=changeit
-kafka.sasl.mechanism=SCRAM-SHA-512
-kafka.sasl.username=health-user
-kafka.sasl.password=secret
-```
-
-`kafka.sasl.jaas.config`가 비어 있지 않으면 username/password 조합보다 우선합니다. 애플리케이션이 JAAS를 생성할 때 따옴표와 역슬래시를 escape합니다. password, JAAS, truststore/keystore/key password는 설정 요약에 기록하지 않습니다.
-
-## 상태와 장애 정책
-
-이미지 입력이 없다는 사실만으로 장애로 판정하지 않습니다. 최신 처리/발행 결과와 watcher 진행 상태를 구분합니다. 개별 손상·빈 파일·크기 초과·안정화 timeout은 해당 파일만 실패 처리하며 계속 감시합니다.
-
-헬스 producer 생성은 `health.init.max.attempts`만큼 backoff 재시도합니다. `health.required=true`에서 모두 실패하면 감시를 시작하지 않고 종료합니다. 전송 실패는 다음 두 조건이 모두 충족되어야 복구를 시작합니다.
-
-- 연속 실패 수가 `health.send.max.consecutive.failures` 이상
-- 마지막 성공(성공 전에는 reporter 시작) 이후 시간이 `health.send.max.failure.duration.seconds` 이상
-
-복구는 producer를 닫고 `health.recovery.max.attempts`만큼 재생성한 뒤 시험 heartbeat를 보냅니다. 재생성까지 실패하면 `HEALTH_KAFKA_UNRECOVERABLE`로 안전하게 자원을 닫고 `health.fatal.exit.code`(기본 20)로 종료합니다. `System.exit()`은 `ApplicationLifecycleManager` 한 곳에서만 호출됩니다.
-
-## 운영 점검과 재기동
-
-fatal 로그의 오류 코드와 원인을 확인하고 다음을 점검한 후 운영 절차에 따라 수동 재기동합니다.
-
-- broker 주소, DNS/방화벽, 이미지/헬스 topic 존재 및 ACL
-- 시스템 시간과 인증서 만료일, truststore/keystore 경로·암호
-- SASL mechanism, 계정 잠김·암호·ACL
-- 감시 디렉터리 접근 권한과 디스크/메모리 여유
-
-INFO는 시작/종료와 적용한 비민감 설정, WARN은 개별 파일·일시 Kafka 오류·복구, ERROR는 설정 오류와 fatal 원인을 기록합니다. Base64 본문과 전체 health JSON은 로그에 남기지 않습니다.
-
-## 버전과 호환성
-
-- Kafka client: 3.9.2
-- CNCF CloudEvents core/json-jackson/kafka: 4.1.1
-- SLF4J API/simple provider: 2.0.17
-- Jackson: 2.21.3
-- JUnit Jupiter: 5.10.2
-
-이 조합은 Java 8 bytecode로 컴파일됩니다. Kafka Java client는 API version negotiation으로 broker 2.8.2가 지원하는 protocol을 선택하므로 producer 기본 기능과 호환됩니다. CloudEvents Kafka 모듈의 전이 Kafka client는 Gradle에서 명시한 3.9.2 하나로 정렬합니다.
-
-## 알려진 한계
-
-- producer 생성은 설정·인증서 형식 오류를 즉시 찾지만 실제 broker 연결은 Kafka가 비동기로 수행하므로, 네트워크/ACL 오류는 첫 callback부터 실패 정책에 반영됩니다.
-- 처리 완료 후 성공 callback에서 파일을 삭제합니다. 별도 archive가 필요하면 운영 반입 전에 삭제 정책을 확장해야 합니다.
-- 파일 내용 자체가 유효한 이미지인지 디코딩하지 않고 확장자·크기·읽기 가능 여부만 검증합니다.
+실행 전 watch 경로가 존재해야 합니다. archive 경로는 없으면 시작할 때 생성합니다.
+fat JAR은 실행에 필요한 의존성을 포함합니다.

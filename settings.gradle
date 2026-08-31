@@ -1,1 +1,2 @@
-rootProject.name = 'image-producer'
+rootProject.name = 'file-collector'
+include 'collector-core', 'file-collector'

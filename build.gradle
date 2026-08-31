@@ -1,49 +1,20 @@
-plugins {
-    id 'java'
-    id 'application'
+allprojects {
+    group = 'com.kafka.producer'
+    version = '2.0-SNAPSHOT'
+
+    repositories { mavenCentral() }
 }
 
-group = 'com.kafka.producer'
-version = '1.1-SNAPSHOT'
+subprojects {
+    apply plugin: 'java'
 
-repositories { mavenCentral() }
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
 
-sourceCompatibility = JavaVersion.VERSION_1_8
-targetCompatibility = JavaVersion.VERSION_1_8
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.compilerArgs += ['-Xlint:all', '-Xlint:-options']
+    }
 
-ext {
-    kafkaVersion = '3.9.2'
-    cloudEventsVersion = '4.1.1'
-    jacksonVersion = '2.21.3'
-}
-
-dependencies {
-    implementation "org.apache.kafka:kafka-clients:${kafkaVersion}"
-    implementation "io.cloudevents:cloudevents-core:${cloudEventsVersion}"
-    implementation "io.cloudevents:cloudevents-json-jackson:${cloudEventsVersion}"
-    implementation "io.cloudevents:cloudevents-kafka:${cloudEventsVersion}"
-    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
-    implementation 'org.slf4j:slf4j-api:2.0.17'
-    runtimeOnly 'org.slf4j:slf4j-simple:2.0.17'
-
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
-}
-
-application {
-    mainClass = 'com.kafka.producer.ApplicationMain'
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-    options.compilerArgs += ['-Xlint:all', '-Xlint:-options']
-}
-
-test { useJUnitPlatform() }
-
-jar {
-    archiveBaseName.set('image-producer')
-    manifest { attributes('Main-Class': application.mainClass.get()) }
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
-    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+    test { useJUnitPlatform() }
 }

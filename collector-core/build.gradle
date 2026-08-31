@@ -1,0 +1,17 @@
+plugins { id 'java-library' }
+
+ext {
+    kafkaVersion = '3.9.2'
+    cloudEventsVersion = '4.1.1'
+    jacksonVersion = '2.21.3'
+}
+
+dependencies {
+    api "org.apache.kafka:kafka-clients:${kafkaVersion}"
+    api "io.cloudevents:cloudevents-core:${cloudEventsVersion}"
+    api "io.cloudevents:cloudevents-json-jackson:${cloudEventsVersion}"
+    implementation "io.cloudevents:cloudevents-kafka:${cloudEventsVersion}"
+    api "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    api 'org.slf4j:slf4j-api:2.0.17'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+}
