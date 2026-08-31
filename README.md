@@ -30,6 +30,11 @@ AWS SDK for Java v2 `2.31.76`을 사용합니다. 작은 파일은 `PutObject`,
 `s3.multipart.threshold.bytes` 이상의 파일은 multipart upload를
 사용합니다. multipart 실패 시 생성한 upload를 abort합니다.
 
+S3 요청 체크섬은 SHA-256 digest의 Base64 값을 사용합니다. `PutObject`에는 전체 파일 체크섬을,
+multipart upload에는 각 part 범위의 체크섬을 `UploadPartRequest.checksumSHA256`과
+`CompletedPart.checksumSHA256`에 전달합니다. Kafka 메타데이터의 `checksum`은 Spark에서 다루기
+쉽도록 동일한 전체 파일 SHA-256을 hex 문자열로 유지합니다.
+
 Kafka 메시지 예시는 다음과 같습니다.
 
 ```json

@@ -10,11 +10,13 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -47,6 +49,17 @@ class FileCollectionServicesTest {
         assertEquals("bucket", json.get("bucket").asText());
         assertEquals("incoming/sample.csv", json.get("objectKey").asText());
         assertFalse(json.has("endpoint"));
+    }
+
+    @Test void calculatesBase64Sha256ForOnlyTheRequestedMultipartRange() throws Exception {
+        byte[] content = "0123456789".getBytes(StandardCharsets.UTF_8);
+        Path file = temp.resolve("multipart.bin");
+        Files.write(file, content);
+        byte[] part = Arrays.copyOfRange(content, 2, 7);
+        String expected = Base64.getEncoder().encodeToString(
+                MessageDigest.getInstance("SHA-256").digest(part));
+
+        assertEquals(expected, AwsS3FileUploader.sha256Base64(file, 2, 5));
     }
 
     @Test void uploadsPublishesThenMovesToOld() throws Exception {
