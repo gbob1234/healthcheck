@@ -17,6 +17,9 @@ public final class TestConfigFactory {
         Path config = Paths.get("config.properties");
         if (!Files.isRegularFile(config)) config = Paths.get("..", "config.properties");
         try (InputStream in = Files.newInputStream(config)) { p.load(in); }
+        p.remove("file.watch.root.directory");
+        p.remove("file.watch.date.directory.pattern");
+        p.remove("file.archive.directory.name");
         p.setProperty("file.watch.directory", watchDirectory.toString());
         p.setProperty("file.archive.directory", watchDirectory.resolve("old").toString());
         return p;

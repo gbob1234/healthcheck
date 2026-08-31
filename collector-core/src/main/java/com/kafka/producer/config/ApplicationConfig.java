@@ -11,6 +11,8 @@ public final class ApplicationConfig {
 
     public static final class FileCollector {
         public final Path directory, archiveDirectory;
+        public final boolean datedDirectoryMode;
+        public final String dateDirectoryPattern, archiveDirectoryName;
         public final Set<String> extensions;
         public final long stabilityIntervalMs, stabilityTimeoutMs, maxFileSizeBytes, retryBackoffMs;
         public final int stabilityRequiredCount, threadCount, maxAttempts;
@@ -18,8 +20,29 @@ public final class ApplicationConfig {
         public FileCollector(Path directory, Path archiveDirectory, Set<String> extensions,
                       long stabilityIntervalMs, int stabilityRequiredCount, long stabilityTimeoutMs,
                       int threadCount, long maxFileSizeBytes, int maxAttempts, long retryBackoffMs) {
+            this(directory, archiveDirectory, false, null, null, extensions, stabilityIntervalMs,
+                    stabilityRequiredCount, stabilityTimeoutMs, threadCount, maxFileSizeBytes,
+                    maxAttempts, retryBackoffMs);
+        }
+
+        public FileCollector(Path rootDirectory, String dateDirectoryPattern, String archiveDirectoryName,
+                      Set<String> extensions, long stabilityIntervalMs, int stabilityRequiredCount,
+                      long stabilityTimeoutMs, int threadCount, long maxFileSizeBytes,
+                      int maxAttempts, long retryBackoffMs) {
+            this(rootDirectory, null, true, dateDirectoryPattern, archiveDirectoryName, extensions,
+                    stabilityIntervalMs, stabilityRequiredCount, stabilityTimeoutMs, threadCount,
+                    maxFileSizeBytes, maxAttempts, retryBackoffMs);
+        }
+
+        private FileCollector(Path directory, Path archiveDirectory, boolean datedDirectoryMode,
+                      String dateDirectoryPattern, String archiveDirectoryName, Set<String> extensions,
+                      long stabilityIntervalMs, int stabilityRequiredCount, long stabilityTimeoutMs,
+                      int threadCount, long maxFileSizeBytes, int maxAttempts, long retryBackoffMs) {
             this.directory = directory;
             this.archiveDirectory = archiveDirectory;
+            this.datedDirectoryMode = datedDirectoryMode;
+            this.dateDirectoryPattern = dateDirectoryPattern;
+            this.archiveDirectoryName = archiveDirectoryName;
             this.extensions = Collections.unmodifiableSet(extensions);
             this.stabilityIntervalMs = stabilityIntervalMs;
             this.stabilityRequiredCount = stabilityRequiredCount;

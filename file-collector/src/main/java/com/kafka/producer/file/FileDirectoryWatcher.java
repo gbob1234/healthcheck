@@ -16,6 +16,10 @@ import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,41 +40,74 @@ public final class FileDirectoryWatcher implements AutoCloseable {
     private final MetadataPublisher publisher;
     private final ApplicationHealthState state;
     private final FatalFailureHandler fatal;
+    private final Clock clock;
+    private final DateTimeFormatter dateDirectoryFormatter;
     private final ExecutorService workers;
     private final Set<Path> inFlight = ConcurrentHashMap.newKeySet();
+    private final Set<Path> registeredDirectories = ConcurrentHashMap.newKeySet();
+    private final Map<WatchKey, Path> watchedDirectories = new ConcurrentHashMap<WatchKey, Path>();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private WatchService watchService;
 
     public FileDirectoryWatcher(ApplicationConfig.FileCollector config, FileStabilityChecker stability,
                                 FileChecksum checksums, ObjectKeyFactory keys, S3FileUploader uploader,
                                 FileMetadataFactory messages, MetadataPublisher publisher,
-                                ApplicationHealthState state, FatalFailureHandler fatal) {
+                                ApplicationHealthState state, FatalFailureHandler fatal, Clock clock) {
         this.config = config; this.stability = stability; this.checksums = checksums; this.keys = keys;
         this.uploader = uploader; this.messages = messages; this.publisher = publisher;
-        this.state = state; this.fatal = fatal;
+        this.state = state; this.fatal = fatal; this.clock = clock;
+        this.dateDirectoryFormatter = config.datedDirectoryMode
+                ? DateTimeFormatter.ofPattern(config.dateDirectoryPattern, Locale.ROOT) : null;
         this.workers = Executors.newFixedThreadPool(config.threadCount);
     }
     public void start() throws IOException {
         if (!running.compareAndSet(false, true)) return;
         watchService = FileSystems.getDefault().newWatchService();
-        config.directory.register(watchService, StandardWatchEventKinds.ENTRY_CREATE);
+        if (config.datedDirectoryMode) {
+            registerDirectory(config.directory);
+            ensureCurrentDateDirectory();
+        } else {
+            registerAndScanDirectory(config.directory);
+        }
         Thread thread = new Thread(new Runnable() { @Override public void run() { watchLoop(); } }, "file-watch-service");
         thread.setDaemon(false); thread.start();
-        LOG.info("Watching file directory: {}", config.directory);
-        scanDirectory();
+        LOG.info("Watching file directory: root={}, mode={}, datePattern={}, archive={}",
+                config.directory, config.datedDirectoryMode ? "DATED" : "FIXED",
+                config.dateDirectoryPattern,
+                config.datedDirectoryMode ? config.archiveDirectoryName : config.archiveDirectory);
     }
     private void watchLoop() {
         try {
             while (running.get()) {
                 WatchKey key = watchService.poll(1, TimeUnit.SECONDS);
                 state.workerProgressed();
+                if (config.datedDirectoryMode) ensureCurrentDateDirectory();
                 if (key == null) continue;
+                Path watchedDirectory = watchedDirectories.get(key);
+                if (watchedDirectory == null) { key.reset(); continue; }
                 for (WatchEvent<?> event : key.pollEvents()) {
-                    if (event.kind() == StandardWatchEventKinds.OVERFLOW) { scanDirectory(); continue; }
-                    Path path = config.directory.resolve((Path) event.context()).toAbsolutePath().normalize();
-                    if (path.startsWith(config.directory)) submitIfSupported(path);
+                    if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+                        if (config.datedDirectoryMode && watchedDirectory.equals(config.directory))
+                            ensureCurrentDateDirectory();
+                        else scanDirectory(watchedDirectory);
+                        continue;
+                    }
+                    Path path = watchedDirectory.resolve((Path) event.context()).toAbsolutePath().normalize();
+                    if (!path.startsWith(watchedDirectory)) continue;
+                    if (config.datedDirectoryMode && watchedDirectory.equals(config.directory)) {
+                        if (path.equals(currentDateDirectory()) && Files.isDirectory(path))
+                            registerAndScanDirectory(path);
+                    } else {
+                        submitIfSupported(path);
+                    }
                 }
-                if (!key.reset()) throw new IOException("File directory WatchKey became invalid");
+                if (!key.reset()) {
+                    watchedDirectories.remove(key);
+                    registeredDirectories.remove(watchedDirectory);
+                    if (watchedDirectory.equals(config.directory))
+                        throw new IOException("File directory WatchKey became invalid: " + watchedDirectory);
+                    LOG.warn("Date directory is no longer watchable: {}", watchedDirectory);
+                }
             }
         } catch (ClosedWatchServiceException ignored) {
         } catch (Exception e) {
@@ -80,8 +117,33 @@ public final class FileDirectoryWatcher implements AutoCloseable {
             }
         } finally { running.set(false); }
     }
-    private void scanDirectory() throws IOException {
-        try (java.util.stream.Stream<Path> paths = Files.list(config.directory)) {
+    private void registerDirectory(Path directory) throws IOException {
+        Path normalized = directory.toAbsolutePath().normalize();
+        if (!registeredDirectories.add(normalized)) return;
+        try {
+            WatchKey key = normalized.register(watchService, StandardWatchEventKinds.ENTRY_CREATE);
+            watchedDirectories.put(key, normalized);
+            LOG.info("Registered watch directory: {}", normalized);
+        } catch (IOException | RuntimeException e) {
+            registeredDirectories.remove(normalized);
+            throw e;
+        }
+    }
+    private void registerAndScanDirectory(Path directory) throws IOException {
+        boolean alreadyRegistered = registeredDirectories.contains(directory.toAbsolutePath().normalize());
+        registerDirectory(directory);
+        if (!alreadyRegistered) scanDirectory(directory);
+    }
+    private void ensureCurrentDateDirectory() throws IOException {
+        Path current = currentDateDirectory();
+        if (Files.isDirectory(current)) registerAndScanDirectory(current);
+    }
+    private Path currentDateDirectory() {
+        return config.directory.resolve(dateDirectoryFormatter.format(LocalDate.now(clock)))
+                .toAbsolutePath().normalize();
+    }
+    private void scanDirectory(Path directory) throws IOException {
+        try (java.util.stream.Stream<Path> paths = Files.list(directory)) {
             paths.filter(Files::isRegularFile).forEach(this::submitIfSupported);
         }
     }
@@ -117,7 +179,8 @@ public final class FileDirectoryWatcher implements AutoCloseable {
             S3FileUploader.UploadResult uploaded = retryUpload(path, objectKey, checksum);
             FileMetadataFactory.Metadata metadata = messages.create(path, size, checksum, uploaded);
             retryPublish(metadata);
-            Files.move(path, config.archiveDirectory.resolve(path.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+            Path archiveDirectory = archiveDirectory(path);
+            Files.move(path, archiveDirectory.resolve(path.getFileName()), StandardCopyOption.REPLACE_EXISTING);
             state.fileProcessingSucceeded(inFlight.size() - 1);
             LOG.info("File collected and archived: file={}, bucket={}, objectKey={}", path.getFileName(), uploaded.bucket, uploaded.objectKey);
         } catch (InterruptedException e) {
@@ -147,6 +210,16 @@ public final class FileDirectoryWatcher implements AutoCloseable {
         throw new StageFailure("FILE_KAFKA_SEND_FAILED", last);
     }
     private void sleepBackoff() throws InterruptedException { if (config.retryBackoffMs > 0) Thread.sleep(config.retryBackoffMs); }
+    private Path archiveDirectory(Path source) throws IOException {
+        if (!config.datedDirectoryMode) return config.archiveDirectory;
+        Path parent = source.getParent().toAbsolutePath().normalize();
+        Path archive = parent.resolve(config.archiveDirectoryName).normalize();
+        if (!archive.getParent().equals(parent)) throw new IOException("Archive directory escapes date directory");
+        Files.createDirectories(archive);
+        if (!Files.isDirectory(archive) || !Files.isWritable(archive))
+            throw new IOException("Archive directory is not writable: " + archive);
+        return archive;
+    }
     private void failFatal(String code, Path path, Throwable error) {
         String message = "File collection failed: " + path + ": " + (error == null ? "unknown" : error.getMessage());
         state.fileProcessingFailed(code, message, inFlight.size() - 1);

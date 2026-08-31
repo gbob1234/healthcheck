@@ -46,6 +46,24 @@ class ConfigLoaderTest {
         assertEquals(ApplicationConfig.SecurityMode.SASL_SSL, TestConfigFactory.load(temp, sasl).kafka.securityMode);
     }
 
+    @Test void loadsDatedDirectoryModeAndRejectsWeekYearPattern() throws Exception {
+        Properties dated = TestConfigFactory.base(temp);
+        dated.remove("file.watch.directory");
+        dated.remove("file.archive.directory");
+        dated.setProperty("file.watch.root.directory", temp.toString());
+        dated.setProperty("file.watch.date.directory.pattern", "yyyyMMdd");
+        dated.setProperty("file.archive.directory.name", "old");
+        ApplicationConfig config = TestConfigFactory.load(temp, dated);
+        assertTrue(config.fileCollector.datedDirectoryMode);
+        assertEquals(temp.toAbsolutePath().normalize(), config.fileCollector.directory);
+        assertEquals("yyyyMMdd", config.fileCollector.dateDirectoryPattern);
+        assertEquals("old", config.fileCollector.archiveDirectoryName);
+        assertNull(config.fileCollector.archiveDirectory);
+
+        dated.setProperty("file.watch.date.directory.pattern", "YYYYMMDD");
+        assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, dated));
+    }
+
     @Test void rejectsMissingAndInvalidSecurityMode() throws Exception {
         Properties missing = TestConfigFactory.base(temp); missing.remove("kafka.bootstrap.servers");
         assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, missing));

@@ -53,8 +53,11 @@ public final class ApplicationMain {
             Properties fileProperties = kafkaFactory.create(config.kafka, config.fileProducer);
             Properties healthProperties = kafkaFactory.create(config.kafka, config.healthProducer);
 
-            LOG.info("Loaded configuration: file={}, watchDirectory={}, archiveDirectory={}, securityMode={}, fileTopic={}, healthTopic={}, s3Endpoint={}, s3Bucket={}, s3Prefix={}, s3PathStyle={}, s3TlsVerify={}",
-                    configPath, config.fileCollector.directory, config.fileCollector.archiveDirectory,
+            LOG.info("Loaded configuration: file={}, watchDirectory={}, archive={}, datedMode={}, securityMode={}, fileTopic={}, healthTopic={}, s3Endpoint={}, s3Bucket={}, s3Prefix={}, s3PathStyle={}, s3TlsVerify={}",
+                    configPath, config.fileCollector.directory,
+                    config.fileCollector.datedDirectoryMode
+                            ? config.fileCollector.archiveDirectoryName : config.fileCollector.archiveDirectory,
+                    config.fileCollector.datedDirectoryMode,
                     config.kafka.securityMode, config.fileProducer.topic, config.healthProducer.topic,
                     config.s3.endpoint, config.s3.bucket, config.s3.objectKeyPrefix,
                     config.s3.pathStyleAccessEnabled, config.s3.tlsVerify);
@@ -69,7 +72,7 @@ public final class ApplicationMain {
                             config.fileCollector.stabilityRequiredCount, config.fileCollector.stabilityTimeoutMs,
                             config.fileCollector.maxFileSizeBytes),
                     new FileChecksum(), new ObjectKeyFactory(config.s3.objectKeyPrefix), uploader,
-                    new FileMetadataFactory(mapper, config.identity, clock), filePublisher, state, lifecycle);
+                    new FileMetadataFactory(mapper, config.identity, clock), filePublisher, state, lifecycle, clock);
             HealthReporter reporter = healthPublisher == null ? null : new HealthReporter(config, state,
                     new HealthStatusEvaluator(clock, config.health.workerStaleSeconds),
                     new HealthCloudEventFactory(config, mapper, clock), healthPublisher, lifecycle, clock);

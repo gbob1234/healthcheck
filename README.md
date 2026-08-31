@@ -14,7 +14,9 @@ file-collector   파일 감시, SHA-256, S3 업로드, 메타데이터 발행, a
 ## 처리 순서
 
 ```text
-ENTRY_CREATE 또는 시작 시 기존 파일 스캔
+장비 PC의 로컬 날짜로 yyyyMMdd 폴더 결정
+→ 날짜 폴더 생성 감지 또는 시작 시 기존 폴더 확인
+→ 날짜 폴더 등록 직후 기존 파일 스캔
 → 확장자/임시파일 필터
 → 파일 크기 안정화 및 open 확인
 → SHA-256 계산
@@ -22,6 +24,11 @@ ENTRY_CREATE 또는 시작 시 기존 파일 스캔
 → Kafka 메타데이터 발행 및 broker ack 대기
 → old 디렉터리로 이동
 ```
+
+일별 모드에서는 `D:/Original` 루트를 감시합니다. 장비 PC의 현재 날짜가 `2026-09-01`이면
+`D:/Original/20260901`이 생성되는 즉시 감시하며, 성공한 파일은
+`D:/Original/20260901/old`로 이동합니다. 자정 이후 새 날짜 폴더도 프로세스 재시작 없이
+자동 등록합니다. 날짜 입력 폴더는 장비가 만들고 수집기는 필요한 `old` 폴더만 생성합니다.
 
 S3 object key는 `{s3.object.key.prefix}/{원본 파일명}`입니다. 같은 파일명은 의도적으로
 동일 key를 덮어씁니다. endpoint와 인증정보는 Kafka 메시지에 포함하지 않습니다.
@@ -72,8 +79,10 @@ Kafka 장애 중에는 종료 헬스 메시지도 발행되지 않을 수 있으
 
 ## 주요 설정
 
-- `file.watch.directory`: 장비 수집 경로
-- `file.archive.directory`: 성공 파일을 이동할 `old` 경로
+- `file.watch.root.directory`: 일별 폴더가 생성되는 장비 수집 루트
+- `file.watch.date.directory.pattern`: 장비 PC 로컬 날짜 폴더 형식, 기본값 `yyyyMMdd`
+- `file.archive.directory.name`: 각 날짜 폴더 아래 생성할 archive 폴더명
+- `file.watch.directory`, `file.archive.directory`: 기존 고정 경로 모드 설정
 - `file.allowed.extensions`: `jpg,jpeg,png,csv` 형식의 허용 확장자
 - `file.processing.max.attempts`, `file.processing.retry.backoff.ms`: S3/Kafka 단계 재시도
 - `s3.endpoint`, `s3.region`, `s3.bucket`, `s3.object.key.prefix`: S3 목적지
@@ -87,6 +96,12 @@ Kafka 장애 중에는 종료 헬스 메시지도 발행되지 않을 수 있으
 설정 파일에 직접 자격증명을 넣을 경우 파일 ACL을 제한해야 하며, 애플리케이션 로그에는 자격증명이
 출력되지 않습니다. S3 권한은 지정 bucket/prefix의 업로드와 multipart abort에 필요한 최소 권한만
 부여하는 것을 권장합니다.
+Java properties에서는 따옴표가 값의 일부이므로 access key와 secret key를 큰따옴표로 감싸면 안 됩니다.
+
+```properties
+s3.access.key=ACCESS_KEY
+s3.secret.key=SECRET_KEY
+```
 
 Dell 내부 endpoint에서 `s3.tls.verify=false`로 설정하면 HTTPS/TLS 암호화는 유지하지만
 `SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES=true`가 적용되어 인증서 체인과 hostname을
@@ -100,5 +115,6 @@ gradlew.bat :file-collector:build
 java -jar file-collector\build\libs\file-collector-2.0-SNAPSHOT.jar .\config.properties
 ```
 
-실행 전 watch 경로가 존재해야 합니다. archive 경로는 없으면 시작할 때 생성합니다.
+실행 전 watch root 경로가 존재해야 합니다. 일별 날짜 폴더는 장비가 만들며 각 날짜의 archive
+경로는 첫 파일의 S3·Kafka 처리가 성공한 후 이동 직전에 생성합니다.
 fat JAR은 실행에 필요한 의존성을 포함합니다.

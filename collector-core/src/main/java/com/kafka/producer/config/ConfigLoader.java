@@ -6,6 +6,8 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Properties;
@@ -22,25 +24,42 @@ public final class ConfigLoader {
         Properties p = new Properties();
         try (InputStream in = Files.newInputStream(path)) { p.load(in); }
 
-        Path watch = Paths.get(required(p, "file.watch.directory")).toAbsolutePath().normalize();
-        if (!Files.isDirectory(watch) || !Files.isReadable(watch))
-            throw new IllegalArgumentException("File watch directory must exist and be readable: " + watch);
-        Path archive = Paths.get(required(p, "file.archive.directory")).toAbsolutePath().normalize();
-        if (archive.equals(watch)) throw new IllegalArgumentException("file.archive.directory must differ from file.watch.directory");
-        Files.createDirectories(archive);
-        if (!Files.isDirectory(archive) || !Files.isWritable(archive))
-            throw new IllegalArgumentException("File archive directory must be writable: " + archive);
-
         long maxFileSize = positiveLong(p, "file.max.file.size.bytes", 1099511627776L);
-        ApplicationConfig.FileCollector fc = new ApplicationConfig.FileCollector(
-                watch, archive, extensions(required(p, "file.allowed.extensions")),
-                positiveLong(p, "file.stability.check.interval.ms", 500),
-                positiveInt(p, "file.stability.required.count", 2),
-                positiveLong(p, "file.stability.timeout.ms", 30000),
-                positiveInt(p, "file.processing.thread.count", 1),
-                maxFileSize,
-                positiveInt(p, "file.processing.max.attempts", 3),
-                nonNegativeLong(p, "file.processing.retry.backoff.ms", 5000));
+        Set<String> allowedExtensions = extensions(required(p, "file.allowed.extensions"));
+        long stabilityIntervalMs = positiveLong(p, "file.stability.check.interval.ms", 500);
+        int stabilityRequiredCount = positiveInt(p, "file.stability.required.count", 2);
+        long stabilityTimeoutMs = positiveLong(p, "file.stability.timeout.ms", 30000);
+        int threadCount = positiveInt(p, "file.processing.thread.count", 1);
+        int maxAttempts = positiveInt(p, "file.processing.max.attempts", 3);
+        long retryBackoffMs = nonNegativeLong(p, "file.processing.retry.backoff.ms", 5000);
+
+        String rootValue = value(p, "file.watch.root.directory", "");
+        String fixedValue = value(p, "file.watch.directory", "");
+        if (rootValue.isEmpty() == fixedValue.isEmpty())
+            throw new IllegalArgumentException("Configure exactly one of file.watch.root.directory or file.watch.directory");
+
+        ApplicationConfig.FileCollector fc;
+        if (!rootValue.isEmpty()) {
+            Path root = readableDirectory("file.watch.root.directory", rootValue);
+            String pattern = value(p, "file.watch.date.directory.pattern", "yyyyMMdd");
+            validateDateDirectoryPattern(pattern);
+            String archiveName = simpleDirectoryName(
+                    "file.archive.directory.name", value(p, "file.archive.directory.name", "old"));
+            fc = new ApplicationConfig.FileCollector(root, pattern, archiveName, allowedExtensions,
+                    stabilityIntervalMs, stabilityRequiredCount, stabilityTimeoutMs, threadCount,
+                    maxFileSize, maxAttempts, retryBackoffMs);
+        } else {
+            Path watch = readableDirectory("file.watch.directory", fixedValue);
+            Path archive = Paths.get(required(p, "file.archive.directory")).toAbsolutePath().normalize();
+            if (archive.equals(watch))
+                throw new IllegalArgumentException("file.archive.directory must differ from file.watch.directory");
+            Files.createDirectories(archive);
+            if (!Files.isDirectory(archive) || !Files.isWritable(archive))
+                throw new IllegalArgumentException("File archive directory must be writable: " + archive);
+            fc = new ApplicationConfig.FileCollector(watch, archive, allowedExtensions,
+                    stabilityIntervalMs, stabilityRequiredCount, stabilityTimeoutMs, threadCount,
+                    maxFileSize, maxAttempts, retryBackoffMs);
+        }
 
         URI endpoint = uri(required(p, "s3.endpoint"), "s3.endpoint");
         String accessKey = value(p, "s3.access.key", "");
@@ -140,6 +159,34 @@ public final class ConfigLoader {
         while (value.startsWith("/")) value = value.substring(1);
         while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
         if (value.contains("../") || value.equals("..")) throw new IllegalArgumentException("s3.object.key.prefix must not contain '..'");
+        return value;
+    }
+
+    private static Path readableDirectory(String key, String raw) {
+        Path path = Paths.get(raw).toAbsolutePath().normalize();
+        if (!Files.isDirectory(path) || !Files.isReadable(path))
+            throw new IllegalArgumentException(key + " must be an existing readable directory: " + path);
+        return path;
+    }
+
+    private static void validateDateDirectoryPattern(String pattern) {
+        if (pattern.indexOf('Y') >= 0 || pattern.indexOf('D') >= 0)
+            throw new IllegalArgumentException("file.watch.date.directory.pattern must use yyyy and dd, not YYYY or DD");
+        try {
+            String sample = DateTimeFormatter.ofPattern(pattern, Locale.ROOT)
+                    .format(LocalDate.of(2026, 9, 1));
+            if (sample.isEmpty() || Paths.get(sample).getNameCount() != 1
+                    || sample.contains("/") || sample.contains("\\") || ".".equals(sample) || "..".equals(sample))
+                throw new IllegalArgumentException();
+        } catch (Exception e) {
+            throw new IllegalArgumentException("file.watch.date.directory.pattern must create one directory name, for example yyyyMMdd", e);
+        }
+    }
+
+    private static String simpleDirectoryName(String key, String value) {
+        if (value.isEmpty() || value.contains("/") || value.contains("\\")
+                || ".".equals(value) || "..".equals(value) || Paths.get(value).getNameCount() != 1)
+            throw new IllegalArgumentException(key + " must be a single directory name");
         return value;
     }
 

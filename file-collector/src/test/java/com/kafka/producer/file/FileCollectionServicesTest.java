@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -113,6 +114,46 @@ class FileCollectionServicesTest {
         } finally { watcher.close(); }
     }
 
+    @Test void deviceLocalDateDirectoryCreatedAfterStartupIsScannedAndArchivedBelowIt() throws Exception {
+        Path root = Files.createDirectory(temp.resolve("daily-root"));
+        List<String> calls = new ArrayList<String>();
+        S3FileUploader uploader = new S3FileUploader() {
+            public UploadResult upload(Path source, String key, String checksum) {
+                calls.add("s3"); return new UploadResult("bucket", key, "etag", null);
+            }
+            public void close() { }
+        };
+        MetadataPublisher publisher = new MetadataPublisher() {
+            public void publish(String key, String json) { calls.add("kafka"); }
+            public void close() { }
+        };
+        CountDownLatch fatal = new CountDownLatch(1);
+        Clock deviceClock = Clock.fixed(Instant.parse("2026-08-31T15:30:00Z"), ZoneId.of("Asia/Seoul"));
+        ApplicationConfig.FileCollector config = new ApplicationConfig.FileCollector(
+                root, "yyyyMMdd", "old", new HashSet<String>(Arrays.asList("csv", "jpg")),
+                1, 1, 1000, 1, 1024 * 1024, 2, 0);
+        ApplicationConfig.Identity identity = new ApplicationConfig.Identity(
+                "DEVICE-1", "EQUIPMENT-A", "SYSTEM", "WINDOWS_PC", "file-collector", "2.0",
+                "health", "/health", "urn:health");
+        ApplicationHealthState state = new ApplicationHealthState(deviceClock);
+        FileDirectoryWatcher watcher = new FileDirectoryWatcher(config,
+                new FileStabilityChecker(1, 1, 1000, 1024 * 1024), new FileChecksum(),
+                new ObjectKeyFactory("prefix"), uploader,
+                new FileMetadataFactory(new ObjectMapper(), identity, deviceClock), publisher, state,
+                (code, message, cause) -> fatal.countDown(), deviceClock);
+        try {
+            watcher.start();
+            Path dateDirectory = Files.createDirectory(root.resolve("20260901"));
+            Path file = dateDirectory.resolve("sample.csv");
+            Files.write(file, "a,b\n1,2\n".getBytes(StandardCharsets.UTF_8));
+
+            awaitFile(dateDirectory.resolve("old").resolve("sample.csv"));
+            assertEquals(Arrays.asList("s3", "kafka"), calls);
+            assertFalse(Files.exists(file));
+            assertEquals(1, fatal.getCount());
+        } finally { watcher.close(); }
+    }
+
     private FileDirectoryWatcher watcher(Path watch, Path archive, S3FileUploader uploader,
                                          MetadataPublisher publisher, CountDownLatch fatal) {
         ApplicationConfig.FileCollector config = new ApplicationConfig.FileCollector(
@@ -125,7 +166,7 @@ class FileCollectionServicesTest {
         return new FileDirectoryWatcher(config, new FileStabilityChecker(1, 1, 1000, 1024 * 1024),
                 new FileChecksum(), new ObjectKeyFactory("prefix"), uploader,
                 new FileMetadataFactory(new ObjectMapper(), identity, Clock.systemUTC()), publisher, state,
-                (code, message, cause) -> fatal.countDown());
+                (code, message, cause) -> fatal.countDown(), Clock.systemUTC());
     }
 
     private static void awaitFile(Path path) throws Exception {
