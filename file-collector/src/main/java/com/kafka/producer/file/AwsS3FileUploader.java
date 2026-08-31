@@ -7,6 +7,8 @@ import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -22,6 +24,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.model.UploadPartResponse;
+import software.amazon.awssdk.utils.AttributeMap;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,14 +39,20 @@ import java.util.Locale;
 public final class AwsS3FileUploader implements S3FileUploader {
     private final ApplicationConfig.S3 config;
     private final S3Client client;
+    private final SdkHttpClient httpClient;
 
     public AwsS3FileUploader(ApplicationConfig.S3 config) {
-        this(config, S3Client.builder().endpointOverride(config.endpoint).region(Region.of(config.region))
-                .credentialsProvider(credentials(config)).httpClientBuilder(UrlConnectionHttpClient.builder())
+        this.config = config;
+        this.httpClient = UrlConnectionHttpClient.builder().buildWithDefaults(AttributeMap.builder()
+                .put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, !config.tlsVerify).build());
+        this.client = S3Client.builder().endpointOverride(config.endpoint).region(Region.of(config.region))
+                .credentialsProvider(credentials(config)).httpClient(httpClient)
                 .serviceConfiguration(S3Configuration.builder()
-                        .pathStyleAccessEnabled(config.pathStyleAccessEnabled).build()).build());
+                        .pathStyleAccessEnabled(config.pathStyleAccessEnabled).build()).build();
     }
-    AwsS3FileUploader(ApplicationConfig.S3 config, S3Client client) { this.config = config; this.client = client; }
+    AwsS3FileUploader(ApplicationConfig.S3 config, S3Client client) {
+        this.config = config; this.client = client; this.httpClient = null;
+    }
 
     public UploadResult upload(Path file, String objectKey, String sha256) throws IOException {
         long size = Files.size(file);
@@ -87,7 +96,7 @@ public final class AwsS3FileUploader implements S3FileUploader {
         }
     }
     private static AwsCredentialsProvider credentials(ApplicationConfig.S3 config) {
-        if (config.accessKey.isEmpty()) return DefaultCredentialsProvider.create();
+        if (config.accessKey.isEmpty()) return DefaultCredentialsProvider.builder().build();
         if (!config.sessionToken.isEmpty()) return StaticCredentialsProvider.create(
                 AwsSessionCredentials.create(config.accessKey, config.secretKey, config.sessionToken));
         return StaticCredentialsProvider.create(AwsBasicCredentials.create(config.accessKey, config.secretKey));
@@ -101,7 +110,10 @@ public final class AwsS3FileUploader implements S3FileUploader {
         if (name.endsWith(".png")) return "image/png";
         return "application/octet-stream";
     }
-    public void close() { client.close(); }
+    public void close() {
+        try { client.close(); }
+        finally { if (httpClient != null) httpClient.close(); }
+    }
 
     private static final class RangedFileProvider implements software.amazon.awssdk.http.ContentStreamProvider {
         private final Path file; private final long offset, length;

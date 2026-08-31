@@ -53,10 +53,11 @@ public final class ApplicationMain {
             Properties fileProperties = kafkaFactory.create(config.kafka, config.fileProducer);
             Properties healthProperties = kafkaFactory.create(config.kafka, config.healthProducer);
 
-            LOG.info("Loaded configuration: file={}, watchDirectory={}, archiveDirectory={}, securityMode={}, fileTopic={}, healthTopic={}, s3Endpoint={}, s3Bucket={}, s3Prefix={}",
+            LOG.info("Loaded configuration: file={}, watchDirectory={}, archiveDirectory={}, securityMode={}, fileTopic={}, healthTopic={}, s3Endpoint={}, s3Bucket={}, s3Prefix={}, s3PathStyle={}, s3TlsVerify={}",
                     configPath, config.fileCollector.directory, config.fileCollector.archiveDirectory,
                     config.kafka.securityMode, config.fileProducer.topic, config.healthProducer.topic,
-                    config.s3.endpoint, config.s3.bucket, config.s3.objectKeyPrefix);
+                    config.s3.endpoint, config.s3.bucket, config.s3.objectKeyPrefix,
+                    config.s3.pathStyleAccessEnabled, config.s3.tlsVerify);
             AwsS3FileUploader uploader = new AwsS3FileUploader(config.s3);
             lifecycle.register(null, null, null, null, uploader);
             FileMetadataPublisher filePublisher = new FileMetadataPublisher(fileProperties, config.fileProducer.topic, state);

@@ -58,7 +58,8 @@ public final class ConfigLoader {
         ApplicationConfig.S3 s3 = new ApplicationConfig.S3(
                 endpoint, required(p, "s3.region"), required(p, "s3.bucket"),
                 normalizePrefix(value(p, "s3.object.key.prefix", "")),
-                bool(p, "s3.path.style.access.enabled", false), accessKey, secretKey, sessionToken,
+                bool(p, "s3.path.style.access.enabled", false), bool(p, "s3.tls.verify", true),
+                accessKey, secretKey, sessionToken,
                 positiveLong(p, "s3.multipart.threshold.bytes", 67108864L), partSize);
 
         ApplicationConfig.SecurityMode mode;

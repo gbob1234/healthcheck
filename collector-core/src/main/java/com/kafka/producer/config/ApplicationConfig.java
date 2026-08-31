@@ -34,18 +34,20 @@ public final class ApplicationConfig {
     public static final class S3 {
         public final URI endpoint;
         public final String region, bucket, objectKeyPrefix;
-        public final boolean pathStyleAccessEnabled;
+        public final boolean pathStyleAccessEnabled, tlsVerify;
         public final String accessKey, secretKey, sessionToken;
         public final long multipartThresholdBytes, multipartPartSizeBytes;
 
         S3(URI endpoint, String region, String bucket, String objectKeyPrefix,
-           boolean pathStyleAccessEnabled, String accessKey, String secretKey, String sessionToken,
+           boolean pathStyleAccessEnabled, boolean tlsVerify,
+           String accessKey, String secretKey, String sessionToken,
            long multipartThresholdBytes, long multipartPartSizeBytes) {
             this.endpoint = endpoint;
             this.region = region;
             this.bucket = bucket;
             this.objectKeyPrefix = objectKeyPrefix;
             this.pathStyleAccessEnabled = pathStyleAccessEnabled;
+            this.tlsVerify = tlsVerify;
             this.accessKey = accessKey;
             this.secretKey = secretKey;
             this.sessionToken = sessionToken;

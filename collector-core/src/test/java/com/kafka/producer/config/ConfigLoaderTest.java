@@ -20,6 +20,8 @@ class ConfigLoaderTest {
         assertTrue(c.fileCollector.extensions.contains("csv"));
         assertEquals("equipment-collection", c.s3.bucket);
         assertEquals("production/equipment", c.s3.objectKeyPrefix);
+        assertTrue(c.s3.pathStyleAccessEnabled);
+        assertFalse(c.s3.tlsVerify);
         assertEquals("DEVICE-001", c.identity.deviceId);
         assertEquals("DEVICE-001-file", c.fileProducer.clientId);
         assertEquals("DEVICE-001-health", c.healthProducer.clientId);

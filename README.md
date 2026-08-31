@@ -26,7 +26,8 @@ ENTRY_CREATE 또는 시작 시 기존 파일 스캔
 S3 object key는 `{s3.object.key.prefix}/{원본 파일명}`입니다. 같은 파일명은 의도적으로
 동일 key를 덮어씁니다. endpoint와 인증정보는 Kafka 메시지에 포함하지 않습니다.
 
-작은 파일은 `PutObject`, `s3.multipart.threshold.bytes` 이상의 파일은 multipart upload를
+AWS SDK for Java v2 `2.31.76`을 사용합니다. 작은 파일은 `PutObject`,
+`s3.multipart.threshold.bytes` 이상의 파일은 multipart upload를
 사용합니다. multipart 실패 시 생성한 upload를 abort합니다.
 
 Kafka 메시지 예시는 다음과 같습니다.
@@ -71,6 +72,8 @@ Kafka 장애 중에는 종료 헬스 메시지도 발행되지 않을 수 있으
 - `file.allowed.extensions`: `jpg,jpeg,png,csv` 형식의 허용 확장자
 - `file.processing.max.attempts`, `file.processing.retry.backoff.ms`: S3/Kafka 단계 재시도
 - `s3.endpoint`, `s3.region`, `s3.bucket`, `s3.object.key.prefix`: S3 목적지
+- `s3.path.style.access.enabled`: `true`이면 Dell S3 compatible storage에 필요한 path-style 요청 사용
+- `s3.tls.verify`: HTTPS 인증서 체인과 hostname 검증 여부
 - `s3.multipart.threshold.bytes`, `s3.multipart.part.size.bytes`: multipart 전환 기준과 part 크기
 - `file.kafka.*`: 파일 메타데이터 producer 설정
 - `health.*`, `health.kafka.*`: heartbeat와 헬스 producer 설정
@@ -79,6 +82,10 @@ Kafka 장애 중에는 종료 헬스 메시지도 발행되지 않을 수 있으
 설정 파일에 직접 자격증명을 넣을 경우 파일 ACL을 제한해야 하며, 애플리케이션 로그에는 자격증명이
 출력되지 않습니다. S3 권한은 지정 bucket/prefix의 업로드와 multipart abort에 필요한 최소 권한만
 부여하는 것을 권장합니다.
+
+Dell 내부 endpoint에서 `s3.tls.verify=false`로 설정하면 HTTPS/TLS 암호화는 유지하지만
+`SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES=true`가 적용되어 인증서 체인과 hostname을
+검증하지 않습니다. 중간자 공격을 탐지하지 못하므로 승인된 폐쇄망 endpoint에서만 사용해야 합니다.
 
 ## 빌드와 실행
 
