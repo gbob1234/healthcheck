@@ -1,4 +1,6 @@
-plugins { id 'java-library' }
+plugins {
+    id 'java-library'
+}
 
 ext {
     kafkaVersion = '3.9.2'

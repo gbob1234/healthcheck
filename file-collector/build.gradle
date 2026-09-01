@@ -1,6 +1,10 @@
-plugins { id 'application' }
+plugins {
+    id 'application'
+}
 
-ext { awsSdkVersion = '2.31.76' }
+ext {
+    awsSdkVersion = '2.31.76'
+}
 
 dependencies {
     implementation project(':collector-core')
@@ -10,12 +14,16 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
 }
 
-application { mainClass = 'com.kafka.producer.ApplicationMain' }
+application {
+    mainClass = 'com.kafka.producer.ApplicationMain'
+}
 
 jar {
     dependsOn ':collector-core:jar'
     archiveBaseName.set('file-collector')
-    manifest { attributes('Main-Class': application.mainClass.get()) }
+    manifest {
+        attributes('Main-Class': application.mainClass.get())
+    }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
