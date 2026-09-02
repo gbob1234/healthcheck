@@ -11,7 +11,7 @@ dependencies {
     implementation "software.amazon.awssdk:s3:${awsSdkVersion}"
     implementation "software.amazon.awssdk:url-connection-client:${awsSdkVersion}"
     runtimeOnly 'org.slf4j:slf4j-simple:2.0.17'
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitJupiterVersion}"
 }
 
 application {
@@ -20,7 +20,7 @@ application {
 
 jar {
     dependsOn ':collector-core:jar'
-    archiveBaseName.set('file-collector')
+    archiveBaseName.set('FILE-COLLECTOR')
     manifest {
         attributes('Main-Class': application.mainClass.get())
     }

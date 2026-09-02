@@ -113,8 +113,22 @@ Dell 내부 endpoint에서 `s3.tls.verify=false`로 설정하면 HTTPS/TLS 암�
 ```bat
 gradlew.bat clean test
 gradlew.bat :file-collector:build
-java -jar file-collector\build\libs\file-collector-2.0-SNAPSHOT.jar .\config.properties
+java -jar file-collector\build\libs\FILE-COLLECTOR-2.0-SNAPSHOT.jar .\config.properties
 ```
+
+의존성 저장소는 `mavenLocal()`, 선택적으로 지정한 Coursier 캐시, `mavenCentral()` 순서로
+조회합니다. Coursier 캐시는 Gradle 속성 또는 환경변수로 지정할 수 있습니다.
+
+```bat
+gradlew.bat -PcoursierCachePath=C:/Users/USER/AppData/Local/Coursier/cache/v1/https/repo1.maven.org/maven2 clean build
+```
+
+```bat
+set COURSIER_CACHE_PATH=C:/Users/USER/AppData/Local/Coursier/cache/v1/https/repo1.maven.org/maven2
+gradlew.bat clean build
+```
+
+테스트 의존성인 JUnit Jupiter는 내부 반입 버전과 동일한 `5.10.1`로 고정합니다.
 
 Windows `.properties` 파일의 경로는 `D:/Original/{yyyyMMdd}/EQP01`처럼 `/`를 사용하거나
 백슬래시를 `D:\\Original\\{yyyyMMdd}\\EQP01`처럼 두 번 써야 합니다. 날짜 자리표시자는 정확히
