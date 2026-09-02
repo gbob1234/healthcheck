@@ -35,14 +35,57 @@ public final class ConfigLoader {
     int maxAttempts = positiveInt(p, "file.processing.max.attempts", 3);
     long retryBackoffMs = nonNegativeLong(p, "file.processing.retry.backoff.ms", 5000);
 
+    String targetValue = value(p, "target.base.dir", "");
     String rootValue = value(p, "file.watch.root.directory", "");
     String fixedValue = value(p, "file.watch.directory", "");
-    if (rootValue.isEmpty() == fixedValue.isEmpty())
+    if (!targetValue.isEmpty() && (!rootValue.isEmpty() || !fixedValue.isEmpty()))
       throw new IllegalArgumentException(
-          "Configure exactly one of file.watch.root.directory or file.watch.directory");
+          "target.base.dir cannot be combined with legacy file.watch.* directory settings");
+    if (targetValue.isEmpty() && rootValue.isEmpty() == fixedValue.isEmpty())
+      throw new IllegalArgumentException(
+          "Configure target.base.dir or exactly one legacy file.watch.* directory setting");
 
     ApplicationConfig.FileCollector fc;
-    if (!rootValue.isEmpty()) {
+    if (!targetValue.isEmpty()) {
+      String archiveName =
+          simpleDirectoryName(
+              "file.archive.directory.name", value(p, "file.archive.directory.name", "old"));
+      if (targetValue.indexOf('{') >= 0 || targetValue.indexOf('}') >= 0) {
+        TargetTemplate target = targetTemplate(targetValue);
+        fc =
+            new ApplicationConfig.FileCollector(
+                target.watchAnchor,
+                target.template,
+                target.datePattern,
+                archiveName,
+                allowedExtensions,
+                stabilityIntervalMs,
+                stabilityRequiredCount,
+                stabilityTimeoutMs,
+                threadCount,
+                maxFileSize,
+                maxAttempts,
+                retryBackoffMs);
+      } else {
+        Path watch = readableDirectory("target.base.dir", targetValue);
+        Path archive = watch.resolve(archiveName).toAbsolutePath().normalize();
+        Files.createDirectories(archive);
+        if (!Files.isDirectory(archive) || !Files.isWritable(archive))
+          throw new IllegalArgumentException("File archive directory must be writable: " + archive);
+        fc =
+            new ApplicationConfig.FileCollector(
+                watch,
+                archive,
+                allowedExtensions,
+                stabilityIntervalMs,
+                stabilityRequiredCount,
+                stabilityTimeoutMs,
+                threadCount,
+                maxFileSize,
+                maxAttempts,
+                retryBackoffMs);
+      }
+    } else if (!rootValue.isEmpty()) {
       Path root = readableDirectory("file.watch.root.directory", rootValue);
       String pattern = value(p, "file.watch.date.directory.pattern", "yyyyMMdd");
       validateDateDirectoryPattern(pattern);
@@ -269,6 +312,56 @@ public final class ConfigLoader {
       throw new IllegalArgumentException(
           "file.watch.date.directory.pattern must create one directory name, for example yyyyMMdd",
           e);
+    }
+  }
+
+  private static TargetTemplate targetTemplate(String raw) {
+    int open = raw.indexOf('{');
+    int close = raw.indexOf('}');
+    if (open < 0
+        || close <= open + 1
+        || raw.indexOf('{', open + 1) >= 0
+        || raw.indexOf('}', close + 1) >= 0)
+      throw new IllegalArgumentException(
+          "target.base.dir must contain exactly one date placeholder, for example "
+              + "D:/Original/{yyyyMMdd}/EQP01");
+
+    String pattern = raw.substring(open + 1, close);
+    validateDateDirectoryPattern(pattern);
+    String template = Paths.get(raw).toAbsolutePath().normalize().toString();
+    String token = "{" + pattern + "}";
+    Path first = renderTarget(template, token, pattern, LocalDate.of(2026, 9, 1));
+    Path second = renderTarget(template, token, pattern, LocalDate.of(2027, 10, 2));
+    if (first.equals(second))
+      throw new IllegalArgumentException(
+          "target.base.dir date placeholder must produce a path that changes with the date");
+
+    Path anchor = first.getRoot();
+    if (anchor == null || !anchor.equals(second.getRoot()))
+      throw new IllegalArgumentException("target.base.dir must resolve to one absolute filesystem");
+    int commonNames = Math.min(first.getNameCount(), second.getNameCount());
+    int index = 0;
+    while (index < commonNames && first.getName(index).equals(second.getName(index))) {
+      anchor = anchor.resolve(first.getName(index));
+      index++;
+    }
+    anchor = readableDirectory("target.base.dir static parent", anchor.toString());
+    return new TargetTemplate(template, pattern, anchor);
+  }
+
+  private static Path renderTarget(String template, String token, String pattern, LocalDate date) {
+    String dateValue = DateTimeFormatter.ofPattern(pattern, Locale.ROOT).format(date);
+    return Paths.get(template.replace(token, dateValue)).toAbsolutePath().normalize();
+  }
+
+  private static final class TargetTemplate {
+    private final String template, datePattern;
+    private final Path watchAnchor;
+
+    private TargetTemplate(String template, String datePattern, Path watchAnchor) {
+      this.template = template;
+      this.datePattern = datePattern;
+      this.watchAnchor = watchAnchor;
     }
   }
 

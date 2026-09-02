@@ -16,7 +16,7 @@ public final class ApplicationConfig {
   public static final class FileCollector {
     public final Path directory, archiveDirectory;
     public final boolean datedDirectoryMode;
-    public final String dateDirectoryPattern, archiveDirectoryName;
+    public final String targetDirectoryTemplate, dateDirectoryPattern, archiveDirectoryName;
     public final Set<String> extensions;
     public final long stabilityIntervalMs, stabilityTimeoutMs, maxFileSizeBytes, retryBackoffMs;
     public final int stabilityRequiredCount, threadCount, maxAttempts;
@@ -36,6 +36,7 @@ public final class ApplicationConfig {
           directory,
           archiveDirectory,
           false,
+          null,
           null,
           null,
           extensions,
@@ -64,6 +65,37 @@ public final class ApplicationConfig {
           rootDirectory,
           null,
           true,
+          rootDirectory.resolve("{" + dateDirectoryPattern + "}").toString(),
+          dateDirectoryPattern,
+          archiveDirectoryName,
+          extensions,
+          stabilityIntervalMs,
+          stabilityRequiredCount,
+          stabilityTimeoutMs,
+          threadCount,
+          maxFileSizeBytes,
+          maxAttempts,
+          retryBackoffMs);
+    }
+
+    public FileCollector(
+        Path watchAnchor,
+        String targetDirectoryTemplate,
+        String dateDirectoryPattern,
+        String archiveDirectoryName,
+        Set<String> extensions,
+        long stabilityIntervalMs,
+        int stabilityRequiredCount,
+        long stabilityTimeoutMs,
+        int threadCount,
+        long maxFileSizeBytes,
+        int maxAttempts,
+        long retryBackoffMs) {
+      this(
+          watchAnchor,
+          null,
+          true,
+          targetDirectoryTemplate,
           dateDirectoryPattern,
           archiveDirectoryName,
           extensions,
@@ -80,6 +112,7 @@ public final class ApplicationConfig {
         Path directory,
         Path archiveDirectory,
         boolean datedDirectoryMode,
+        String targetDirectoryTemplate,
         String dateDirectoryPattern,
         String archiveDirectoryName,
         Set<String> extensions,
@@ -93,6 +126,7 @@ public final class ApplicationConfig {
       this.directory = directory;
       this.archiveDirectory = archiveDirectory;
       this.datedDirectoryMode = datedDirectoryMode;
+      this.targetDirectoryTemplate = targetDirectoryTemplate;
       this.dateDirectoryPattern = dateDirectoryPattern;
       this.archiveDirectoryName = archiveDirectoryName;
       this.extensions = Collections.unmodifiableSet(extensions);

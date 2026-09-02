@@ -53,22 +53,44 @@ class ConfigLoaderTest {
   }
 
   @Test
-  void loadsDatedDirectoryModeAndRejectsWeekYearPattern() throws Exception {
+  void loadsTargetTemplateWithSuffixAndRejectsInvalidPatterns() throws Exception {
     Properties dated = TestConfigFactory.base(temp);
     dated.remove("file.watch.directory");
     dated.remove("file.archive.directory");
-    dated.setProperty("file.watch.root.directory", temp.toString());
-    dated.setProperty("file.watch.date.directory.pattern", "yyyyMMdd");
+    dated.setProperty("target.base.dir", temp.resolve("{yyyyMMdd}").resolve("EQP01").toString());
     dated.setProperty("file.archive.directory.name", "old");
     ApplicationConfig config = TestConfigFactory.load(temp, dated);
     assertTrue(config.fileCollector.datedDirectoryMode);
     assertEquals(temp.toAbsolutePath().normalize(), config.fileCollector.directory);
+    assertEquals(
+        temp.resolve("{yyyyMMdd}").resolve("EQP01").toAbsolutePath().normalize().toString(),
+        config.fileCollector.targetDirectoryTemplate);
     assertEquals("yyyyMMdd", config.fileCollector.dateDirectoryPattern);
     assertEquals("old", config.fileCollector.archiveDirectoryName);
     assertNull(config.fileCollector.archiveDirectory);
 
-    dated.setProperty("file.watch.date.directory.pattern", "YYYYMMDD");
+    dated.setProperty("target.base.dir", temp.resolve("{YYYYMMDD}").toString());
     assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, dated));
+
+    dated.setProperty("target.base.dir", temp.resolve("{yyyyMMdd").toString());
+    assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, dated));
+  }
+
+  @Test
+  void loadsFixedTargetBaseDirectoryAndRejectsLegacyDirectoryCombination() throws Exception {
+    Properties fixed = TestConfigFactory.base(temp);
+    fixed.remove("file.watch.directory");
+    fixed.remove("file.archive.directory");
+    fixed.setProperty("target.base.dir", temp.toString());
+
+    ApplicationConfig config = TestConfigFactory.load(temp, fixed);
+    assertFalse(config.fileCollector.datedDirectoryMode);
+    assertEquals(temp.toAbsolutePath().normalize(), config.fileCollector.directory);
+    assertEquals(
+        temp.resolve("old").toAbsolutePath().normalize(), config.fileCollector.archiveDirectory);
+
+    fixed.setProperty("file.watch.directory", temp.toString());
+    assertThrows(IllegalArgumentException.class, () -> TestConfigFactory.load(temp, fixed));
   }
 
   @Test

@@ -61,11 +61,12 @@ public final class ApplicationMain {
       Properties healthProperties = kafkaFactory.create(config.kafka, config.healthProducer);
 
       LOG.info(
-          "Loaded configuration: file={}, watchDirectory={}, archive={}, datedMode={},"
-              + " securityMode={}, fileTopic={}, healthTopic={}, s3Endpoint={}, s3Bucket={},"
-              + " s3Prefix={}, s3PathStyle={}, s3TlsVerify={}",
+          "Loaded configuration: file={}, watchDirectory={}, targetTemplate={}, archive={},"
+              + " datedMode={}, securityMode={}, fileTopic={}, healthTopic={}, s3Endpoint={},"
+              + " s3Bucket={}, s3Prefix={}, s3PathStyle={}, s3TlsVerify={}",
           configPath,
           config.fileCollector.directory,
+          config.fileCollector.targetDirectoryTemplate,
           config.fileCollector.datedDirectoryMode
               ? config.fileCollector.archiveDirectoryName
               : config.fileCollector.archiveDirectory,

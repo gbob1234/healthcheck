@@ -19,6 +19,7 @@ public final class TestConfigFactory {
     try (InputStream in = Files.newInputStream(config)) {
       p.load(in);
     }
+    p.remove("target.base.dir");
     p.remove("file.watch.root.directory");
     p.remove("file.watch.date.directory.pattern");
     p.remove("file.archive.directory.name");

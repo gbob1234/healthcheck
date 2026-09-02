@@ -183,9 +183,9 @@ public final class FileDirectoryWatcher implements AutoCloseable {
   }
 
   private Path currentDateDirectory() {
-    return config
-        .directory
-        .resolve(dateDirectoryFormatter.format(LocalDate.now(clock)))
+    String token = "{" + config.dateDirectoryPattern + "}";
+    String date = dateDirectoryFormatter.format(LocalDate.now(clock));
+    return java.nio.file.Paths.get(config.targetDirectoryTemplate.replace(token, date))
         .toAbsolutePath()
         .normalize();
   }

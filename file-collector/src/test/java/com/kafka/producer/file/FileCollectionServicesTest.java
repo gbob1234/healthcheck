@@ -152,7 +152,7 @@ class FileCollectionServicesTest {
   }
 
   @Test
-  void deviceLocalDateDirectoryCreatedAfterStartupIsScannedAndArchivedBelowIt() throws Exception {
+  void targetTemplateWithSuffixCreatedAfterStartupIsScannedAndArchivedBelowIt() throws Exception {
     Path root = Files.createDirectory(temp.resolve("daily-root"));
     List<String> calls = new ArrayList<String>();
     S3FileUploader uploader =
@@ -177,6 +177,7 @@ class FileCollectionServicesTest {
     ApplicationConfig.FileCollector config =
         new ApplicationConfig.FileCollector(
             root,
+            root.resolve("{yyyyMMdd}").resolve("EQP01").toString(),
             "yyyyMMdd",
             "old",
             new HashSet<String>(Arrays.asList("csv", "jpg")),
@@ -213,11 +214,11 @@ class FileCollectionServicesTest {
             deviceClock);
     try {
       watcher.start();
-      Path dateDirectory = Files.createDirectory(root.resolve("20260901"));
-      Path file = dateDirectory.resolve("sample.csv");
+      Path targetDirectory = Files.createDirectories(root.resolve("20260901").resolve("EQP01"));
+      Path file = targetDirectory.resolve("sample.csv");
       Files.write(file, "a,b\n1,2\n".getBytes(StandardCharsets.UTF_8));
 
-      awaitFile(dateDirectory.resolve("old").resolve("sample.csv"));
+      awaitFile(targetDirectory.resolve("old").resolve("sample.csv"));
       assertEquals(Arrays.asList("s3", "kafka"), calls);
       assertFalse(Files.exists(file));
       assertEquals(1, fatal.getCount());
