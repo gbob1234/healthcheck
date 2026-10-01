@@ -1,14 +1,16 @@
 package com.kafka.producer.file;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kafka.producer.config.ApplicationConfig;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -17,6 +19,9 @@ import java.util.Map;
  * Builds a portable S3 metadata message without exposing the configured endpoint or credentials.
  */
 public final class FileMetadataFactory {
+  private static final DateTimeFormatter CREATE_TIME_FORMAT =
+      DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+
   private final ObjectMapper mapper;
   private final ApplicationConfig.Identity identity;
   private final Clock clock;
@@ -30,13 +35,17 @@ public final class FileMetadataFactory {
 
   public Metadata create(
       Path file, long size, String checksum, S3FileUploader.UploadResult uploaded)
-      throws JsonProcessingException {
+      throws IOException {
     String eventId = eventId(identity.deviceName, uploaded.bucket, uploaded.objectKey, checksum);
     Map<String, Object> value = new LinkedHashMap<String, Object>();
     value.put("schemaVersion", 1);
     value.put("eventId", eventId);
     value.put("deviceName", identity.deviceName);
     value.put("fileName", file.getFileName().toString());
+    value.put(
+        "create_time",
+        CREATE_TIME_FORMAT.format(
+            Files.getLastModifiedTime(file).toInstant().atZone(clock.getZone())));
     value.put("fileType", extension(file).toUpperCase(Locale.ROOT));
     value.put("fileSize", size);
     value.put("checksumAlgorithm", "SHA-256");

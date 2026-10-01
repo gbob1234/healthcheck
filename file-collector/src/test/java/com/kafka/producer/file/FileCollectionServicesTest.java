@@ -9,11 +9,11 @@ import com.kafka.producer.health.ApplicationHealthState;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -31,6 +31,7 @@ class FileCollectionServicesTest {
   void calculatesChecksumKeyAndDeterministicMetadata() throws Exception {
     Path file = temp.resolve("sample.csv");
     Files.write(file, "a,b\n1,2\n".getBytes(StandardCharsets.UTF_8));
+    Files.setLastModifiedTime(file, FileTime.from(Instant.parse("2026-08-13T05:30:55.184Z")));
     String checksum = new FileChecksum().sha256(file);
     assertEquals(64, checksum.length());
     assertEquals("incoming/sample.csv", new ObjectKeyFactory("incoming").create(file));
@@ -50,7 +51,7 @@ class FileCollectionServicesTest {
         new FileMetadataFactory(
             new ObjectMapper(),
             identity,
-            Clock.fixed(Instant.parse("2026-08-31T01:02:03Z"), ZoneOffset.UTC));
+            Clock.fixed(Instant.parse("2026-08-31T01:02:03Z"), ZoneId.of("Asia/Seoul")));
     S3FileUploader.UploadResult upload =
         new S3FileUploader.UploadResult("bucket", "incoming/sample.csv", "etag", null);
     FileMetadataFactory.Metadata first = factory.create(file, Files.size(file), checksum, upload);
@@ -58,6 +59,7 @@ class FileCollectionServicesTest {
     assertEquals(first.eventId, second.eventId);
     JsonNode json = new ObjectMapper().readTree(first.json);
     assertEquals("EQUIPMENT-A", json.get("deviceName").asText());
+    assertEquals("20260813143055184", json.get("create_time").asText());
     assertEquals("CSV", json.get("fileType").asText());
     assertEquals("bucket", json.get("bucket").asText());
     assertEquals("incoming/sample.csv", json.get("objectKey").asText());

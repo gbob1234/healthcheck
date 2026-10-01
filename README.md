@@ -51,6 +51,7 @@ Kafka 메시지 예시는 다음과 같습니다.
   "eventId": "85b5...",
   "deviceName": "DEVICE-001",
   "fileName": "GROWING_DIA_1A001_None_None_None.csv",
+  "create_time": "20260813143055184",
   "fileType": "CSV",
   "fileSize": 30184,
   "checksumAlgorithm": "SHA-256",
@@ -61,6 +62,10 @@ Kafka 메시지 예시는 다음과 같습니다.
   "uploadedAt": "2026-08-31T01:02:03Z"
 }
 ```
+
+`create_time`은 메시지 생성 시각이 아니라 원본 파일의 `lastModifiedTime`입니다. 장비 PC의
+로컬 시간대로 변환한 `yyyyMMddHHmmssSSS` 형식(예: `20260813143055184`)으로 발행합니다.
+`uploadedAt`은 S3 업로드가 완료된 시각이므로 두 필드는 서로 다른 의미를 가집니다.
 
 `eventId`는 `deviceName + bucket + objectKey + checksum`으로 결정적으로 생성합니다.
 프로그램 재시작이나 Kafka 재전송으로 같은 이벤트가 중복되면 Spark에서 이 값으로 제거할 수 있습니다.
